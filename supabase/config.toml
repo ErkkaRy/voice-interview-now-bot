@@ -1,1 +1,17 @@
+
 project_id = "jhjbvmyfzmjrfoodphuj"
+
+[functions.start-interview]
+verify_jwt = false
+
+[functions.handle-call]
+verify_jwt = false
+
+[functions.ai-conversation]
+verify_jwt = false
+
+[functions.get-interviews]
+verify_jwt = false
+
+[functions.save-interview]
+verify_jwt = false

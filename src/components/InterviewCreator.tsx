@@ -7,11 +7,13 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { FileText, Upload, Plus, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 const InterviewCreator = () => {
   const [interviewTitle, setInterviewTitle] = useState("");
   const [questions, setQuestions] = useState<string[]>([""]);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
   const addQuestion = () => {
@@ -41,7 +43,7 @@ const InterviewCreator = () => {
     }
   };
 
-  const handleSaveInterview = () => {
+  const handleSaveInterview = async () => {
     if (!interviewTitle.trim()) {
       toast({
         title: "Virhe",
@@ -61,15 +63,45 @@ const InterviewCreator = () => {
       return;
     }
 
-    toast({
-      title: "Haastattelu tallennettu!",
-      description: `"${interviewTitle}" on luotu ${validQuestions.length} kysymyksellä.`,
-    });
+    setIsLoading(true);
 
-    // Reset form
-    setInterviewTitle("");
-    setQuestions([""]);
-    setUploadedFile(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('save-interview', {
+        body: {
+          title: interviewTitle,
+          questions: validQuestions
+        }
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      const result = await data;
+      
+      if (result.interview) {
+        toast({
+          title: "Haastattelu tallennettu!",
+          description: `"${interviewTitle}" on luotu ${validQuestions.length} kysymyksellä.`,
+        });
+
+        // Reset form
+        setInterviewTitle("");
+        setQuestions([""]);
+        setUploadedFile(null);
+      } else {
+        throw new Error(result.error || 'Tuntematon virhe');
+      }
+    } catch (error) {
+      console.error('Error saving interview:', error);
+      toast({
+        title: "Virhe",
+        description: "Haastattelun tallentaminen epäonnistui.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -160,8 +192,12 @@ const InterviewCreator = () => {
 
           {/* Action Buttons */}
           <div className="flex gap-4 pt-4">
-            <Button onClick={handleSaveInterview} className="bg-blue-600 hover:bg-blue-700">
-              Tallenna haastattelu
+            <Button 
+              onClick={handleSaveInterview} 
+              className="bg-blue-600 hover:bg-blue-700"
+              disabled={isLoading}
+            >
+              {isLoading ? "Tallennetaan..." : "Tallenna haastattelu"}
             </Button>
             <Button variant="outline" className="border-slate-300 hover:bg-slate-50">
               Testaa botilla

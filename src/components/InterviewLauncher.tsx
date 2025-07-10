@@ -1,5 +1,4 @@
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -7,21 +6,48 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Phone, MessageSquare, Clock, CheckCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+
+interface Interview {
+  id: string;
+  title: string;
+  questions: string[];
+}
 
 const InterviewLauncher = () => {
   const [selectedInterview, setSelectedInterview] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [interviewStatus, setInterviewStatus] = useState<"idle" | "sms-sent" | "waiting" | "active">("idle");
+  const [interviews, setInterviews] = useState<Interview[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
-  // Mock interviews data
-  const interviews = [
-    { id: "1", name: "Ohjelmistokehittäjä - Tekninen haastattelu", questions: 8 },
-    { id: "2", name: "Myyntiedustaja - Haastattelu", questions: 6 },
-    { id: "3", name: "Projektipäällikkö - Haastattelu", questions: 10 },
-  ];
+  // Fetch interviews on component mount
+  useEffect(() => {
+    fetchInterviews();
+  }, []);
 
-  const handleSendSMS = () => {
+  const fetchInterviews = async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke('get-interviews');
+      
+      if (error) {
+        throw error;
+      }
+
+      const result = await data;
+      setInterviews(result.interviews || []);
+    } catch (error) {
+      console.error('Error fetching interviews:', error);
+      toast({
+        title: "Virhe",
+        description: "Haastattelujen lataaminen epäonnistui.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleSendSMS = async () => {
     if (!selectedInterview || !phoneNumber) {
       toast({
         title: "Virhe",
@@ -31,29 +57,59 @@ const InterviewLauncher = () => {
       return;
     }
 
+    setIsLoading(true);
     setInterviewStatus("sms-sent");
-    toast({
-      title: "Tekstiviesti lähetetty!",
-      description: `Kutsu lähetetty numeroon ${phoneNumber}. Odotetaan vastausta...`,
-    });
 
-    // Simulate SMS response after 5 seconds
-    setTimeout(() => {
-      setInterviewStatus("waiting");
-      toast({
-        title: "Vastaus saapunut",
-        description: "Haastateltava vastasi 'Nyt'. Aloitetaan puhelu...",
+    try {
+      const { data, error } = await supabase.functions.invoke('start-interview', {
+        body: {
+          interviewId: selectedInterview,
+          phoneNumber: phoneNumber
+        }
       });
+
+      if (error) {
+        throw error;
+      }
+
+      const result = await data;
       
-      // Simulate call start after 2 seconds
-      setTimeout(() => {
-        setInterviewStatus("active");
+      if (result.success) {
         toast({
-          title: "Puhelu käynnissä",
-          description: "AI-botti keskustelee haastateltavan kanssa.",
+          title: "Tekstiviesti lähetetty!",
+          description: `Kutsu lähetetty numeroon ${phoneNumber}. Odotetaan vastausta...`,
         });
-      }, 2000);
-    }, 5000);
+
+        // Simulate waiting for response (in real app, you'd use webhooks or polling)
+        setTimeout(() => {
+          setInterviewStatus("waiting");
+          toast({
+            title: "Haastateltava vastasi",
+            description: "Aloitetaan puhelu...",
+          });
+          
+          setTimeout(() => {
+            setInterviewStatus("active");
+            toast({
+              title: "Puhelu käynnissä",
+              description: "AI-botti keskustelee haastateltavan kanssa.",
+            });
+          }, 2000);
+        }, 5000);
+      } else {
+        throw new Error(result.error || 'Tuntematon virhe');
+      }
+    } catch (error) {
+      console.error('Error starting interview:', error);
+      toast({
+        title: "Virhe",
+        description: "Haastattelun käynnistäminen epäonnistui.",
+        variant: "destructive",
+      });
+      setInterviewStatus("idle");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const resetInterview = () => {
@@ -121,7 +177,7 @@ const InterviewLauncher = () => {
             </p>
             {interviewStatus === "sms-sent" && (
               <p className="text-sm text-slate-600 mt-2">
-                Haastateltava saa tekstiviestin: "Haastattelu on valmis. Vastaa 'Nyt' kun haluat aloittaa."
+                Haastateltava saa tekstiviestin: "Hei! Sinulla on haastattelu odottamassa. Vastaa 'KYLLÄ' kun olet valmis aloittamaan puhelun."
               </p>
             )}
           </div>
@@ -138,7 +194,7 @@ const InterviewLauncher = () => {
                   <SelectContent>
                     {interviews.map((interview) => (
                       <SelectItem key={interview.id} value={interview.id}>
-                        {interview.name} ({interview.questions} kysymystä)
+                        {interview.title} ({interview.questions.length} kysymystä)
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -165,10 +221,10 @@ const InterviewLauncher = () => {
               <Button 
                 onClick={handleSendSMS}
                 className="w-full bg-blue-600 hover:bg-blue-700"
-                disabled={!selectedInterview || !phoneNumber}
+                disabled={!selectedInterview || !phoneNumber || isLoading}
               >
                 <MessageSquare className="h-4 w-4 mr-2" />
-                Lähetä kutsutekstiviesti
+                {isLoading ? "Lähetetään..." : "Lähetä kutsutekstiviesti"}
               </Button>
             </>
           )}
@@ -182,18 +238,14 @@ const InterviewLauncher = () => {
                 </p>
               </div>
               
-              {/* Mock conversation log */}
               <div className="border border-slate-200 rounded-lg p-4 max-h-60 overflow-y-auto">
                 <h4 className="font-semibold mb-2">Keskustelu (live)</h4>
                 <div className="space-y-2 text-sm">
                   <div className="text-blue-600">
-                    <strong>AI:</strong> Hei! Olen AI-assistentti ja haastattelen sinua tänään. Kerro ensiksi hieman itsestäsi.
+                    <strong>AI:</strong> Hei! Aloitetaan haastattelu. Kerro ensiksi hieman itsestäsi.
                   </div>
                   <div className="text-slate-600">
-                    <strong>Haastateltava:</strong> Hei! Olen Matti ja työskentelen ohjelmistokehittäjänä...
-                  </div>
-                  <div className="text-blue-600">
-                    <strong>AI:</strong> Kiitos! Mikä on mielestäsi tärkein ominaisuus hyvälle ohjelmoijalle?
+                    <strong>Haastateltava:</strong> Vastaus kuuluu tähän...
                   </div>
                   <div className="text-slate-400 italic">
                     Haastattelu jatkuu...
