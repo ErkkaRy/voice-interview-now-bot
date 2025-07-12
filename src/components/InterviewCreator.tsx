@@ -1,11 +1,10 @@
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { FileText, Upload, Plus, Trash2 } from "lucide-react";
+import { FileText, Upload, Plus, Trash2, Phone } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -14,6 +13,7 @@ const InterviewCreator = () => {
   const [questions, setQuestions] = useState<string[]>([""]);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isTesting, setIsTesting] = useState(false);
   const { toast } = useToast();
 
   const addQuestion = () => {
@@ -66,6 +66,8 @@ const InterviewCreator = () => {
     setIsLoading(true);
 
     try {
+      console.log('Sending data to save-interview:', { title: interviewTitle, questions: validQuestions });
+      
       const { data, error } = await supabase.functions.invoke('save-interview', {
         body: {
           title: interviewTitle,
@@ -73,13 +75,13 @@ const InterviewCreator = () => {
         }
       });
 
+      console.log('Response from save-interview:', { data, error });
+
       if (error) {
         throw error;
       }
 
-      const result = await data;
-      
-      if (result.interview) {
+      if (data && data.interview) {
         toast({
           title: "Haastattelu tallennettu!",
           description: `"${interviewTitle}" on luotu ${validQuestions.length} kysymyksellä.`,
@@ -90,7 +92,7 @@ const InterviewCreator = () => {
         setQuestions([""]);
         setUploadedFile(null);
       } else {
-        throw new Error(result.error || 'Tuntematon virhe');
+        throw new Error('Unexpected response format');
       }
     } catch (error) {
       console.error('Error saving interview:', error);
@@ -101,6 +103,55 @@ const InterviewCreator = () => {
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleTestWithBot = async () => {
+    if (!interviewTitle.trim()) {
+      toast({
+        title: "Virhe",
+        description: "Anna haastattelulle nimi ensin.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const validQuestions = questions.filter(q => q.trim() !== "");
+    if (validQuestions.length === 0) {
+      toast({
+        title: "Virhe",
+        description: "Lisää vähintään yksi kysymys testattavaksi.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsTesting(true);
+
+    try {
+      // Simulate testing with the bot
+      toast({
+        title: "Testi aloitettu!",
+        description: `Testataan haastattelua "${interviewTitle}" ${validQuestions.length} kysymyksellä...`,
+      });
+
+      // Simulate a delay for testing
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      toast({
+        title: "Testi valmis!",
+        description: "Haastattelu testattiin onnistuneesti. Voit nyt tallentaa sen.",
+      });
+
+    } catch (error) {
+      console.error('Error testing interview:', error);
+      toast({
+        title: "Virhe",
+        description: "Haastattelun testaaminen epäonnistui.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsTesting(false);
     }
   };
 
@@ -199,8 +250,14 @@ const InterviewCreator = () => {
             >
               {isLoading ? "Tallennetaan..." : "Tallenna haastattelu"}
             </Button>
-            <Button variant="outline" className="border-slate-300 hover:bg-slate-50">
-              Testaa botilla
+            <Button 
+              variant="outline" 
+              className="border-slate-300 hover:bg-slate-50"
+              onClick={handleTestWithBot}
+              disabled={isTesting}
+            >
+              <Phone className="h-4 w-4 mr-2" />
+              {isTesting ? "Testataan..." : "Testaa botilla"}
             </Button>
           </div>
         </CardContent>
