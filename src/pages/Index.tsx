@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,9 +6,11 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Phone, Bot, FileText, Clock, CheckCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import InterviewCreator from "@/components/InterviewCreator";
 
 const Index = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [currentView, setCurrentView] = useState("dashboard"); // dashboard, create-interview
   const [loginData, setLoginData] = useState({ email: "", password: "" });
   const [registerData, setRegisterData] = useState({ email: "", password: "", name: "" });
   const { toast } = useToast();
@@ -34,6 +35,14 @@ const Index = () => {
         description: "Tilisi on luotu onnistuneesti.",
       });
     }
+  };
+
+  const handleCreateInterview = () => {
+    setCurrentView("create-interview");
+  };
+
+  const handleBackToDashboard = () => {
+    setCurrentView("dashboard");
   };
 
   if (!isLoggedIn) {
@@ -176,6 +185,41 @@ const Index = () => {
     );
   }
 
+  // Show InterviewCreator when creating interview
+  if (currentView === "create-interview") {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
+        <div className="container mx-auto px-4 py-8">
+          {/* Header with back button */}
+          <div className="flex justify-between items-center mb-8">
+            <div className="flex items-center gap-2">
+              <Bot className="h-8 w-8 text-blue-600" />
+              <h1 className="text-2xl font-bold text-slate-800">AI Haastattelu</h1>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={handleBackToDashboard}
+                className="border-slate-300 hover:bg-slate-100"
+              >
+                Takaisin
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setIsLoggedIn(false)}
+                className="border-slate-300 hover:bg-slate-100"
+              >
+                Kirjaudu ulos
+              </Button>
+            </div>
+          </div>
+
+          <InterviewCreator />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
       <div className="container mx-auto px-4 py-8">
@@ -208,7 +252,10 @@ const Index = () => {
               </CardHeader>
               <CardContent>
                 <div className="grid sm:grid-cols-2 gap-4">
-                  <Button className="h-20 bg-blue-600 hover:bg-blue-700 flex-col gap-2">
+                  <Button 
+                    onClick={handleCreateInterview}
+                    className="h-20 bg-blue-600 hover:bg-blue-700 flex-col gap-2"
+                  >
                     <FileText className="h-6 w-6" />
                     Luo uusi haastattelu
                   </Button>
