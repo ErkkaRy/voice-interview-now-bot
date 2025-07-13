@@ -36,20 +36,7 @@ serve(async (req) => {
       throw new Error('Interview not found');
     }
 
-    // Create call record
-    const { data: call, error: callError } = await supabase
-      .from('calls')
-      .insert({
-        interview_id: interviewId,
-        phone_number: phoneNumber,
-        status: 'pending'
-      })
-      .select()
-      .single();
-
-    if (callError) {
-      throw new Error('Failed to create call record');
-    }
+    console.log('Found interview:', interview);
 
     // Send SMS using Twilio
     const twilioAccountSid = Deno.env.get('TWILIO_ACCOUNT_SID');
@@ -67,7 +54,7 @@ serve(async (req) => {
       },
       body: new URLSearchParams({
         To: phoneNumber,
-        From: '+12345678901', // Replace with your Twilio phone number
+        From: Deno.env.get('TWILIO_PHONE_NUMBER')!,
         Body: smsBody,
       }),
     });
@@ -83,9 +70,13 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify({ 
-        success: true, 
-        callId: call.id,
-        messageSid: twilioData.sid 
+        success: true,
+        messageSid: twilioData.sid,
+        interview: {
+          id: interview.id,
+          title: interview.title,
+          questionCount: interview.questions.length
+        }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

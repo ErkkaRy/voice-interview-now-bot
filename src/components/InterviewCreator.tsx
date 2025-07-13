@@ -8,7 +8,11 @@ import { FileText, Upload, Plus, Trash2, Phone } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
-const InterviewCreator = () => {
+interface InterviewCreatorProps {
+  onInterviewCreated?: () => void;
+}
+
+const InterviewCreator = ({ onInterviewCreated }: InterviewCreatorProps = {}) => {
   const [interviewTitle, setInterviewTitle] = useState("");
   const [questions, setQuestions] = useState<string[]>([""]);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
@@ -91,6 +95,9 @@ const InterviewCreator = () => {
         setInterviewTitle("");
         setQuestions([""]);
         setUploadedFile(null);
+        
+        // Notify parent component
+        onInterviewCreated?.();
       } else {
         throw new Error('Unexpected response format');
       }
@@ -170,6 +177,9 @@ const InterviewCreator = () => {
       setInterviewTitle("");
       setQuestions([""]);
       setUploadedFile(null);
+      
+      // Notify parent component  
+      onInterviewCreated?.();
 
     } catch (error) {
       console.error('Error testing interview:', error);

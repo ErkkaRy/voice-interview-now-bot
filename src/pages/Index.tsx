@@ -239,7 +239,7 @@ const Index = () => {
             </div>
           </div>
 
-          <InterviewCreator />
+          <InterviewCreator onInterviewCreated={fetchInterviews} />
         </div>
       </div>
     );
