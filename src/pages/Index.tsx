@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -6,14 +6,39 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Phone, Bot, FileText, Clock, CheckCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 import InterviewCreator from "@/components/InterviewCreator";
+import InterviewLauncher from "@/components/InterviewLauncher";
 
 const Index = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [currentView, setCurrentView] = useState("dashboard"); // dashboard, create-interview
   const [loginData, setLoginData] = useState({ email: "", password: "" });
   const [registerData, setRegisterData] = useState({ email: "", password: "", name: "" });
+  const [interviews, setInterviews] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
+
+  const fetchInterviews = async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke('get-interviews');
+      if (error) throw error;
+      setInterviews(data.interviews || []);
+    } catch (error) {
+      console.error('Error fetching interviews:', error);
+      toast({
+        title: "Virhe",
+        description: "Haastattelujen lataaminen epäonnistui.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchInterviews();
+  }, []);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -259,48 +284,16 @@ const Index = () => {
                     <FileText className="h-6 w-6" />
                     Luo uusi haastattelu
                   </Button>
-                  <Button variant="outline" className="h-20 flex-col gap-2 border-slate-300 hover:bg-slate-50">
-                    <Phone className="h-6 w-6" />
-                    Käynnistä haastattelu
-                  </Button>
+                  <div className="h-20 p-4 border-2 border-dashed border-slate-300 rounded-lg flex flex-col items-center justify-center text-slate-500">
+                    <Phone className="h-6 w-6 mb-1" />
+                    <span className="text-sm">Käynnistä haastattelu alempana</span>
+                  </div>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Recent Interviews */}
-            <Card className="border-0 shadow-lg bg-white/80 backdrop-blur">
-              <CardHeader>
-                <CardTitle>Viimeisimmät haastattelut</CardTitle>
-                <CardDescription>Seuraa haastattelujesi tilannetta</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {/* Placeholder interviews */}
-                  <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
-                    <div>
-                      <h4 className="font-semibold text-slate-800">Ohjelmistokehittäjä - Haastattelu</h4>
-                      <p className="text-sm text-slate-600">Luotu: 2 tuntia sitten</p>
-                    </div>
-                    <div className="text-right">
-                      <span className="inline-block px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs">
-                        Valmis
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
-                    <div>
-                      <h4 className="font-semibold text-slate-800">Myyntiedustaja - Haastattelu</h4>
-                      <p className="text-sm text-slate-600">Luotu: 1 päivä sitten</p>
-                    </div>
-                    <div className="text-right">
-                      <span className="inline-block px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">
-                        Käynnissä
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            {/* Interview Launcher */}
+            <InterviewLauncher interviews={interviews} isLoading={isLoading} />
           </div>
 
           {/* Stats Sidebar */}

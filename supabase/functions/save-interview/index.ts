@@ -33,18 +33,25 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    // For now, let's just return a mock response since we don't have interviews table yet
-    const mockInterview = {
-      id: crypto.randomUUID(),
-      title,
-      questions: validQuestions,
-      created_at: new Date().toISOString()
-    };
+    // Save interview to database
+    const { data: interview, error: dbError } = await supabase
+      .from('interviews')
+      .insert({
+        title,
+        questions: validQuestions
+      })
+      .select()
+      .single();
 
-    console.log('Created mock interview:', mockInterview);
+    if (dbError) {
+      console.error('Database error:', dbError);
+      throw new Error('Failed to save interview to database');
+    }
+
+    console.log('Created interview:', interview);
 
     return new Response(
-      JSON.stringify({ interview: mockInterview }),
+      JSON.stringify({ interview }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 

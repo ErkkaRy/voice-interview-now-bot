@@ -107,6 +107,7 @@ const InterviewCreator = () => {
   };
 
   const handleTestWithBot = async () => {
+    // Save interview first if not saved
     if (!interviewTitle.trim()) {
       toast({
         title: "Virhe",
@@ -129,19 +130,46 @@ const InterviewCreator = () => {
     setIsTesting(true);
 
     try {
-      // Simulate testing with the bot
-      toast({
-        title: "Testi aloitettu!",
-        description: `Testataan haastattelua "${interviewTitle}" ${validQuestions.length} kysymyksellä...`,
+      // First save the interview
+      const { data, error } = await supabase.functions.invoke('save-interview', {
+        body: {
+          title: interviewTitle,
+          questions: validQuestions
+        }
       });
 
-      // Simulate a delay for testing
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      if (error) throw error;
+
+      // Then ask for phone number to test
+      const phoneNumber = prompt("Anna puhelinnumerosi testikutsua varten (esim. +358501234567):");
+      
+      if (!phoneNumber) {
+        toast({
+          title: "Testi peruutettu",
+          description: "Puhelinnumeroa ei annettu.",
+        });
+        return;
+      }
+
+      // Send test interview
+      const { data: testData, error: testError } = await supabase.functions.invoke('start-interview', {
+        body: {
+          phoneNumber: phoneNumber.trim(),
+          interviewId: data.interview.id
+        }
+      });
+
+      if (testError) throw testError;
 
       toast({
-        title: "Testi valmis!",
-        description: "Haastattelu testattiin onnistuneesti. Voit nyt tallentaa sen.",
+        title: "Testikutsu lähetetty!",
+        description: `Saat tekstiviestin numeroon ${phoneNumber}. Vastaa 'KYLLÄ' aloittaaksesi testin.`,
       });
+
+      // Reset form after successful test
+      setInterviewTitle("");
+      setQuestions([""]);
+      setUploadedFile(null);
 
     } catch (error) {
       console.error('Error testing interview:', error);
