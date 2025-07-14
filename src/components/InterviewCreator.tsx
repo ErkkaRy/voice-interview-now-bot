@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -10,15 +10,32 @@ import { supabase } from "@/integrations/supabase/client";
 
 interface InterviewCreatorProps {
   onInterviewCreated?: () => void;
+  editingInterview?: {
+    id: string;
+    title: string;
+    questions: string[];
+  } | null;
 }
 
-const InterviewCreator = ({ onInterviewCreated }: InterviewCreatorProps = {}) => {
-  const [interviewTitle, setInterviewTitle] = useState("");
-  const [questions, setQuestions] = useState<string[]>([""]);
+const InterviewCreator = ({ onInterviewCreated, editingInterview }: InterviewCreatorProps = {}) => {
+  const [interviewTitle, setInterviewTitle] = useState(editingInterview?.title || "");
+  const [questions, setQuestions] = useState<string[]>(editingInterview?.questions || [""]);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
   const { toast } = useToast();
+
+  // Update form when editingInterview changes
+  React.useEffect(() => {
+    if (editingInterview) {
+      setInterviewTitle(editingInterview.title);
+      setQuestions(editingInterview.questions.length > 0 ? editingInterview.questions : [""]);
+    } else {
+      setInterviewTitle("");
+      setQuestions([""]);
+    }
+    setUploadedFile(null);
+  }, [editingInterview]);
 
   const addQuestion = () => {
     setQuestions([...questions, ""]);
@@ -75,7 +92,8 @@ const InterviewCreator = ({ onInterviewCreated }: InterviewCreatorProps = {}) =>
       const { data, error } = await supabase.functions.invoke('save-interview', {
         body: {
           title: interviewTitle,
-          questions: validQuestions
+          questions: validQuestions,
+          ...(editingInterview && { id: editingInterview.id })
         }
       });
 
@@ -87,8 +105,8 @@ const InterviewCreator = ({ onInterviewCreated }: InterviewCreatorProps = {}) =>
 
       if (data && data.interview) {
         toast({
-          title: "Haastattelu tallennettu!",
-          description: `"${interviewTitle}" on luotu ${validQuestions.length} kysymyksellä.`,
+          title: editingInterview ? "Haastattelu päivitetty!" : "Haastattelu tallennettu!",
+          description: `"${interviewTitle}" ${editingInterview ? 'päivitettiin' : 'luotiin'} ${validQuestions.length} kysymyksellä.`,
         });
 
         // Reset form
@@ -286,7 +304,7 @@ const InterviewCreator = ({ onInterviewCreated }: InterviewCreatorProps = {}) =>
               className="bg-blue-600 hover:bg-blue-700"
               disabled={isLoading}
             >
-              {isLoading ? "Tallennetaan..." : "Tallenna haastattelu"}
+              {isLoading ? "Tallennetaan..." : (editingInterview ? "Päivitä haastattelu" : "Tallenna haastattelu")}
             </Button>
             <Button 
               variant="outline" 

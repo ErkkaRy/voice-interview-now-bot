@@ -13,9 +13,9 @@ serve(async (req) => {
   }
 
   try {
-    const { title, questions } = await req.json();
+    const { title, questions, id } = await req.json();
     
-    console.log('Received data:', { title, questions });
+    console.log('Received data:', { title, questions, id });
     
     if (!title || !questions || !Array.isArray(questions)) {
       throw new Error('Title and questions array are required');
@@ -33,22 +33,44 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    // Save interview to database
-    const { data: interview, error: dbError } = await supabase
-      .from('interviews')
-      .insert({
-        title,
-        questions: validQuestions
-      })
-      .select()
-      .single();
+    let interview, dbError;
+
+    if (id) {
+      // Update existing interview
+      const result = await supabase
+        .from('interviews')
+        .update({
+          title,
+          questions: validQuestions,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id)
+        .select()
+        .single();
+      
+      interview = result.data;
+      dbError = result.error;
+    } else {
+      // Create new interview
+      const result = await supabase
+        .from('interviews')
+        .insert({
+          title,
+          questions: validQuestions
+        })
+        .select()
+        .single();
+      
+      interview = result.data;
+      dbError = result.error;
+    }
 
     if (dbError) {
       console.error('Database error:', dbError);
       throw new Error('Failed to save interview to database');
     }
 
-    console.log('Created interview:', interview);
+    console.log('Saved interview:', interview);
 
     return new Response(
       JSON.stringify({ interview }),

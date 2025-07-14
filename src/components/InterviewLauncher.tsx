@@ -4,16 +4,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Phone, MessageSquare, Loader2 } from "lucide-react";
+import { Phone, MessageSquare, Loader2, Edit } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
 interface InterviewLauncherProps {
   interviews: any[];
   isLoading: boolean;
+  onEditInterview: (interview: any) => void;
 }
 
-const InterviewLauncher = ({ interviews, isLoading }: InterviewLauncherProps) => {
+const InterviewLauncher = ({ interviews, isLoading, onEditInterview }: InterviewLauncherProps) => {
   const [selectedInterview, setSelectedInterview] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -92,9 +93,22 @@ const InterviewLauncher = ({ interviews, isLoading }: InterviewLauncherProps) =>
                   </div>
                 ) : (
                   interviews.map((interview) => (
-                    <SelectItem key={interview.id} value={interview.id}>
-                      {interview.title} ({interview.questions.length} kysymystä)
-                    </SelectItem>
+                    <div key={interview.id} className="flex items-center justify-between p-2 hover:bg-slate-50 rounded">
+                      <SelectItem value={interview.id} className="flex-1">
+                        {interview.title} ({interview.questions.length} kysymystä)
+                      </SelectItem>
+                      <Button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onEditInterview(interview);
+                        }}
+                        size="sm"
+                        variant="outline"
+                        className="ml-2 h-8 w-8 p-0"
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                    </div>
                   ))
                 )}
               </SelectContent>

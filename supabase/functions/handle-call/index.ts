@@ -26,22 +26,24 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    // Find pending call for this phone number
-    const { data: call, error: callError } = await supabase
-      .from('calls')
-      .select('*, interviews(*)')
-      .eq('phone_number', from)
-      .eq('status', 'pending')
+    console.log('Received call from:', from, 'to:', to);
+
+    // For now, we'll start the interview directly since we removed the calls table
+    // In a production system, you might want to verify the caller somehow
+    
+    // Get the most recent interview for testing
+    const { data: interview, error: interviewError } = await supabase
+      .from('interviews')
+      .select('*')
       .order('created_at', { ascending: false })
       .limit(1)
       .single();
 
-    if (callError || !call) {
-      console.error('Call not found:', callError);
-      // Return TwiML for unknown caller
+    if (interviewError || !interview) {
+      console.error('No interview found:', interviewError);
       const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say voice="alice" language="fi-FI">Anteeksi, en löydä aktiivista haastattelua tälle numerolle.</Say>
+  <Say voice="alice" language="fi-FI">Anteeksi, en löydä aktiivista haastattelua.</Say>
   <Hangup/>
 </Response>`;
       return new Response(twiml, {
@@ -49,28 +51,20 @@ serve(async (req) => {
       });
     }
 
-    // Update call status
-    await supabase
-      .from('calls')
-      .update({ 
-        status: 'active',
-        call_sid: callSid,
-        started_at: new Date().toISOString()
-      })
-      .eq('id', call.id);
+    console.log('Starting interview:', interview.title);
 
     // Create TwiML response to start the interview
     const webhookUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/ai-conversation`;
     
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say voice="alice" language="fi-FI">Hei! Aloitetaan haastattelu. Kuuntelen sinua nyt.</Say>
+  <Say voice="alice" language="fi-FI">Hei! Aloitetaan haastattelu ${interview.title}. Kuuntelen sinua nyt.</Say>
   <Record 
     timeout="3"
     finishOnKey=""
     maxLength="30"
     playBeep="false"
-    recordingStatusCallback="${webhookUrl}?callId=${call.id}"
+    recordingStatusCallback="${webhookUrl}?interviewId=${interview.id}&from=${from}"
     recordingStatusCallbackMethod="POST"
   />
   <Say voice="alice" language="fi-FI">En kuullut vastausta. Lopetan puhelun.</Say>

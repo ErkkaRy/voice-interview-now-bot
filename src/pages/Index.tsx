@@ -17,6 +17,7 @@ const Index = () => {
   const [registerData, setRegisterData] = useState({ email: "", password: "", name: "" });
   const [interviews, setInterviews] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [editingInterview, setEditingInterview] = useState<any>(null);
   const { toast } = useToast();
 
   const fetchInterviews = async () => {
@@ -239,7 +240,13 @@ const Index = () => {
             </div>
           </div>
 
-          <InterviewCreator onInterviewCreated={fetchInterviews} />
+          <InterviewCreator 
+            onInterviewCreated={() => {
+              fetchInterviews();
+              setEditingInterview(null);
+            }} 
+            editingInterview={editingInterview}
+          />
         </div>
       </div>
     );
@@ -293,7 +300,11 @@ const Index = () => {
             </Card>
 
             {/* Interview Launcher */}
-            <InterviewLauncher interviews={interviews} isLoading={isLoading} />
+            <InterviewLauncher 
+              interviews={interviews} 
+              isLoading={isLoading}
+              onEditInterview={setEditingInterview}
+            />
           </div>
 
           {/* Stats Sidebar */}
