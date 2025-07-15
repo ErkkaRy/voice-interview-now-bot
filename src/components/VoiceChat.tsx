@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Mic, MicOff, Volume2, VolumeX, X } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
+import { RealtimeChat } from '@/utils/RealtimeAudio';
 
 interface VoiceChatProps {
   interview: {
@@ -13,138 +14,82 @@ interface VoiceChatProps {
 }
 
 export const VoiceChat: React.FC<VoiceChatProps> = ({ interview, onClose }) => {
-  const [isRecording, setIsRecording] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [currentMessage, setCurrentMessage] = useState('');
-  const [conversation, setConversation] = useState<Array<{role: string, content: string}>>([]);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [conversation, setConversation] = useState<Array<{role: string, content: string, type?: string}>>([]);
   const { toast } = useToast();
   
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
-  const audioContextRef = useRef<AudioContext | null>(null);
+  const realtimeChatRef = useRef<RealtimeChat | null>(null);
 
   useEffect(() => {
-    // Initialize with interview introduction
-    const intro = `Hei! Aloitetaan haastattelu: ${interview.title}. Ensimmäinen kysymys: ${interview.questions[0] || 'Kerro itsestäsi.'}`;
-    setConversation([{ role: 'assistant', content: intro }]);
-    
-    // Speak the introduction
-    speakText(intro);
-    
     return () => {
-      if (audioContextRef.current) {
-        audioContextRef.current.close();
-      }
+      realtimeChatRef.current?.disconnect();
     };
-  }, [interview]);
+  }, []);
 
-  const speakText = async (text: string) => {
-    try {
-      setIsSpeaking(true);
-      
-      // Use browser's speech synthesis as a quick test
-      if ('speechSynthesis' in window) {
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = 'fi-FI';
-        utterance.rate = 0.9;
-        utterance.onend = () => setIsSpeaking(false);
-        speechSynthesis.speak(utterance);
-      }
-    } catch (error) {
-      console.error('Error in text-to-speech:', error);
-      setIsSpeaking(false);
-    }
-  };
-
-  const startRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: {
-          sampleRate: 16000,
-          channelCount: 1,
-          echoCancellation: true,
-          noiseSuppression: true
-        } 
-      });
-      
-      audioChunksRef.current = [];
-      mediaRecorderRef.current = new MediaRecorder(stream);
-      
-      mediaRecorderRef.current.ondataavailable = (event) => {
-        audioChunksRef.current.push(event.data);
-      };
-      
-      mediaRecorderRef.current.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        await processAudio(audioBlob);
-        
-        // Stop all tracks
-        stream.getTracks().forEach(track => track.stop());
-      };
-      
-      mediaRecorderRef.current.start();
-      setIsRecording(true);
-      
-      toast({
-        title: "Nauhoitus aloitettu",
-        description: "Puhu nyt vastauksesi",
-      });
-    } catch (error) {
-      console.error('Error starting recording:', error);
-      toast({
-        title: "Virhe",
-        description: "Mikrofonin käyttö epäonnistui",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-    }
-  };
-
-  const processAudio = async (audioBlob: Blob) => {
-    try {
-      // Convert audio to base64
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        const base64Audio = (reader.result as string).split(',')[1];
-        
-        // For now, simulate speech recognition
-        // In a real implementation, you would send this to OpenAI Whisper
-        const simulatedTranscript = "Tämä on simuloitu vastaus audiosta.";
-        
-        setConversation(prev => [...prev, { role: 'user', content: simulatedTranscript }]);
-        
-        // Generate AI response
-        const aiResponse = generateNextQuestion();
-        setConversation(prev => [...prev, { role: 'assistant', content: aiResponse }]);
-        
-        // Speak the AI response
-        await speakText(aiResponse);
-      };
-      reader.readAsDataURL(audioBlob);
-    } catch (error) {
-      console.error('Error processing audio:', error);
-      toast({
-        title: "Virhe",
-        description: "Äänen käsittely epäonnistui",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const generateNextQuestion = () => {
-    const currentQuestionIndex = conversation.filter(msg => msg.role === 'assistant').length;
+  const handleMessage = (event: any) => {
+    console.log('Received message:', event);
     
-    if (currentQuestionIndex < interview.questions.length) {
-      return interview.questions[currentQuestionIndex];
-    } else {
-      return "Kiitos haastattelusta! Onko sinulla vielä jotain lisättävää?";
+    if (event.type === 'response.audio.delta') {
+      setIsSpeaking(true);
+    } else if (event.type === 'response.audio.done') {
+      setIsSpeaking(false);
+    } else if (event.type === 'response.audio_transcript.delta') {
+      setConversation(prev => {
+        const lastMessage = prev[prev.length - 1];
+        if (lastMessage && lastMessage.role === 'assistant' && lastMessage.type === 'transcript') {
+          // Update existing transcript
+          return [
+            ...prev.slice(0, -1),
+            { ...lastMessage, content: lastMessage.content + event.delta }
+          ];
+        } else {
+          // Add new transcript message
+          return [...prev, { role: 'assistant', content: event.delta, type: 'transcript' }];
+        }
+      });
+    } else if (event.type === 'input_audio_buffer.speech_started') {
+      console.log('Speech started');
+    } else if (event.type === 'input_audio_buffer.speech_stopped') {
+      console.log('Speech stopped');
+    } else if (event.type === 'conversation.item.input_audio_transcription.completed') {
+      setConversation(prev => [...prev, { 
+        role: 'user', 
+        content: event.transcript,
+        type: 'transcript'
+      }]);
     }
+  };
+
+  const startConversation = async () => {
+    try {
+      setIsConnecting(true);
+      realtimeChatRef.current = new RealtimeChat(handleMessage);
+      await realtimeChatRef.current.init(interview.questions);
+      setIsConnected(true);
+      setIsConnecting(false);
+      
+      toast({
+        title: "Yhdistetty",
+        description: "Voice chat on valmis käyttöön",
+      });
+    } catch (error) {
+      console.error('Error starting conversation:', error);
+      setIsConnecting(false);
+      toast({
+        title: "Virhe",
+        description: error instanceof Error ? error.message : 'Yhteyden muodostaminen epäonnistui',
+        variant: "destructive",
+      });
+    }
+  };
+
+  const endConversation = () => {
+    realtimeChatRef.current?.disconnect();
+    setIsConnected(false);
+    setIsSpeaking(false);
+    setConversation([]);
   };
 
   return (
@@ -177,52 +122,61 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({ interview, onClose }) => {
 
           {/* Current Status */}
           <div className="text-center p-4 border rounded">
-            {isSpeaking && (
+            {isConnecting && (
+              <div className="flex items-center justify-center gap-2 text-blue-600">
+                <Volume2 className="h-5 w-5 animate-pulse" />
+                <span>Yhdistetään...</span>
+              </div>
+            )}
+            
+            {isSpeaking && isConnected && (
               <div className="flex items-center justify-center gap-2 text-blue-600">
                 <Volume2 className="h-5 w-5 animate-pulse" />
                 <span>AI puhuu...</span>
               </div>
             )}
             
-            {isRecording && (
-              <div className="flex items-center justify-center gap-2 text-red-600">
-                <Mic className="h-5 w-5 animate-pulse" />
-                <span>Kuuntelen vastaustasi...</span>
+            {isConnected && !isSpeaking && !isConnecting && (
+              <div className="text-green-600">
+                <Mic className="h-5 w-5 mx-auto mb-2" />
+                <span>Voit puhua - AI kuuntelee</span>
               </div>
             )}
             
-            {!isSpeaking && !isRecording && (
+            {!isConnected && !isConnecting && (
               <div className="text-gray-600">
-                Paina mikrofonia aloittaaksesi vastaamisen
+                Paina "Aloita keskustelu" aloittaaksesi
               </div>
             )}
           </div>
 
           {/* Controls */}
           <div className="flex justify-center gap-4">
-            <Button
-              onClick={isRecording ? stopRecording : startRecording}
-              disabled={isSpeaking}
-              className={isRecording ? 'bg-red-500 hover:bg-red-600' : 'bg-blue-500 hover:bg-blue-600'}
-              size="lg"
-            >
-              {isRecording ? (
-                <>
-                  <MicOff className="h-5 w-5 mr-2" />
-                  Lopeta nauhoitus
-                </>
-              ) : (
-                <>
-                  <Mic className="h-5 w-5 mr-2" />
-                  Aloita vastaaminen
-                </>
-              )}
-            </Button>
+            {!isConnected ? (
+              <Button
+                onClick={startConversation}
+                disabled={isConnecting}
+                className="bg-blue-500 hover:bg-blue-600"
+                size="lg"
+              >
+                <Mic className="h-5 w-5 mr-2" />
+                {isConnecting ? 'Yhdistetään...' : 'Aloita keskustelu'}
+              </Button>
+            ) : (
+              <Button
+                onClick={endConversation}
+                className="bg-red-500 hover:bg-red-600"
+                size="lg"
+              >
+                <MicOff className="h-5 w-5 mr-2" />
+                Lopeta keskustelu
+              </Button>
+            )}
           </div>
 
           <div className="text-sm text-gray-500 text-center">
-            <p>Tämä on demo-versio voice chatista.</p>
-            <p>Oikeassa versiossa käytettäisiin OpenAI:n Whisper-tunnistusta ja real-time -puhesynteesiä.</p>
+            <p>OpenAI gpt-4o-realtime-preview -malli käytössä</p>
+            <p>AI kuuntelee puheesi ja vastaa äänellä reaaliajassa</p>
           </div>
         </CardContent>
       </Card>
