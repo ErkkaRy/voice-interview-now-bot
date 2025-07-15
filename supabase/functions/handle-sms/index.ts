@@ -27,18 +27,16 @@ serve(async (req) => {
 
     // Check if response is positive
     if (body === 'KYLLÄ' || body === 'KYLLA' || body === 'YES' || body === 'Y') {
-      // Find pending call for this phone number
-      const { data: call, error: callError } = await supabase
-        .from('calls')
-        .select('*, interviews(*)')
-        .eq('phone_number', from)
-        .eq('status', 'pending')
+      // Get the most recent interview for this phone number (simplified approach)
+      const { data: interview, error: interviewError } = await supabase
+        .from('interviews')
+        .select('*')
         .order('created_at', { ascending: false })
         .limit(1)
         .single();
 
-      if (callError || !call) {
-        console.error('Call not found:', callError);
+      if (interviewError || !interview) {
+        console.error('Interview not found:', interviewError);
         return new Response('OK', { status: 200 });
       }
 
@@ -69,36 +67,10 @@ serve(async (req) => {
       } else {
         const twilioData = await twilioResponse.json();
         console.log('Call initiated successfully:', twilioData.sid);
-        
-        // Update call status to indicate call was initiated
-        await supabase
-          .from('calls')
-          .update({ 
-            status: 'calling',
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', call.id);
       }
     } else if (body === 'EI' || body === 'NO' || body === 'N') {
-      // Handle negative response
-      const { data: call } = await supabase
-        .from('calls')
-        .select('*')
-        .eq('phone_number', from)
-        .eq('status', 'pending')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
-
-      if (call) {
-        await supabase
-          .from('calls')
-          .update({ 
-            status: 'cancelled',
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', call.id);
-      }
+      // Handle negative response - just log it for now
+      console.log('User declined interview call');
     }
 
     return new Response('OK', { status: 200 });

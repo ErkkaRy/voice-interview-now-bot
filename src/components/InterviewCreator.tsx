@@ -191,13 +191,9 @@ const InterviewCreator = ({ onInterviewCreated, editingInterview }: InterviewCre
         description: `Saat tekstiviestin numeroon ${phoneNumber}. Vastaa 'KYLLÄ' aloittaaksesi testin.`,
       });
 
-      // Reset form after successful test
-      setInterviewTitle("");
-      setQuestions([""]);
-      setUploadedFile(null);
-      
-      // Notify parent component  
-      onInterviewCreated?.();
+        // Don't reset form after test - keep it for further editing
+        // Notify parent component  
+        onInterviewCreated?.();
 
     } catch (error) {
       console.error('Error testing interview:', error);

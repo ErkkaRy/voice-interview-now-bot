@@ -303,7 +303,10 @@ const Index = () => {
             <InterviewLauncher 
               interviews={interviews} 
               isLoading={isLoading}
-              onEditInterview={setEditingInterview}
+              onEditInterview={(interview) => {
+                setEditingInterview(interview);
+                setCurrentView("create-interview");
+              }}
             />
           </div>
 
