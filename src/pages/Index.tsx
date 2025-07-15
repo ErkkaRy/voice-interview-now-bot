@@ -243,9 +243,16 @@ const Index = () => {
           <InterviewCreator 
             onInterviewCreated={() => {
               fetchInterviews();
-              setEditingInterview(null);
-            }} 
+              // Don't automatically switch view when editing existing interview
+              if (!editingInterview) {
+                setCurrentView("dashboard");
+              }
+            }}
             editingInterview={editingInterview}
+            onClose={() => {
+              setCurrentView("dashboard");
+              setEditingInterview(null);
+            }}
           />
         </div>
       </div>

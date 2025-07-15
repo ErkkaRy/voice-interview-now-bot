@@ -4,12 +4,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { FileText, Upload, Plus, Trash2, Phone } from "lucide-react";
+import { FileText, Upload, Plus, Trash2, Phone, Mic, ArrowLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { VoiceChat } from "@/components/VoiceChat";
 
 interface InterviewCreatorProps {
   onInterviewCreated?: () => void;
+  onClose?: () => void;
   editingInterview?: {
     id: string;
     title: string;
@@ -17,12 +19,13 @@ interface InterviewCreatorProps {
   } | null;
 }
 
-const InterviewCreator = ({ onInterviewCreated, editingInterview }: InterviewCreatorProps = {}) => {
+const InterviewCreator = ({ onInterviewCreated, onClose, editingInterview }: InterviewCreatorProps = {}) => {
   const [interviewTitle, setInterviewTitle] = useState(editingInterview?.title || "");
   const [questions, setQuestions] = useState<string[]>(editingInterview?.questions || [""]);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
+  const [showVoiceChat, setShowVoiceChat] = useState(false);
   const { toast } = useToast();
 
   // Update form when editingInterview changes
@@ -208,8 +211,21 @@ const InterviewCreator = ({ onInterviewCreated, editingInterview }: InterviewCre
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
-      <Card className="border-0 shadow-lg bg-white/80 backdrop-blur">
+    <>
+      <div className="max-w-4xl mx-auto p-6">
+        {/* Back button */}
+        <div className="mb-6">
+          <Button 
+            variant="outline" 
+            onClick={onClose}
+            className="border-slate-300 hover:bg-slate-50"
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Takaisin
+          </Button>
+        </div>
+
+        <Card className="border-0 shadow-lg bg-white/80 backdrop-blur">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5 text-blue-600" />
@@ -311,10 +327,31 @@ const InterviewCreator = ({ onInterviewCreated, editingInterview }: InterviewCre
               <Phone className="h-4 w-4 mr-2" />
               {isTesting ? "Testataan..." : "Testaa botilla"}
             </Button>
+            <Button 
+              variant="outline" 
+              className="border-primary text-primary hover:bg-primary/10"
+              onClick={() => setShowVoiceChat(true)}
+              disabled={!interviewTitle.trim() || questions.filter(q => q.trim()).length === 0}
+            >
+              <Mic className="h-4 w-4 mr-2" />
+              Testaa voice chat
+            </Button>
           </div>
         </CardContent>
       </Card>
-    </div>
+      </div>
+
+      {/* Voice Chat Modal */}
+      {showVoiceChat && (
+        <VoiceChat
+          interview={{
+            title: interviewTitle,
+            questions: questions.filter(q => q.trim() !== "")
+          }}
+          onClose={() => setShowVoiceChat(false)}
+        />
+      )}
+    </>
   );
 };
 
