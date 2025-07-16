@@ -11,17 +11,16 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const AZURE_OPENAI_API_KEY = Deno.env.get('AZURE_OPENAI_API_KEY');
-  const AZURE_OPENAI_ENDPOINT = Deno.env.get('AZURE_OPENAI_ENDPOINT');
+  const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
   
-  if (!AZURE_OPENAI_API_KEY || !AZURE_OPENAI_ENDPOINT) {
-    return new Response(JSON.stringify({ error: 'Azure OpenAI credentials not configured' }), {
+  if (!OPENAI_API_KEY) {
+    return new Response(JSON.stringify({ error: 'OpenAI API key not configured' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
 
-  console.log('Starting WebSocket connection to Azure OpenAI Realtime API');
+  console.log('Starting WebSocket connection to OpenAI Realtime API');
   
   const { socket, response } = Deno.upgradeWebSocket(req);
   let azureWs: WebSocket | null = null;
@@ -30,22 +29,22 @@ serve(async (req) => {
     console.log('Client WebSocket opened');
     
     try {
-      // Connect to Azure OpenAI Realtime API
-      const azureUrl = `wss://${AZURE_OPENAI_ENDPOINT.replace('https://', '')}/openai/realtime?api-version=2024-10-01-preview&deployment=gpt-4o-realtime-preview`;
-      console.log('Connecting to Azure OpenAI:', azureUrl);
+      // Connect to OpenAI Realtime API
+      const openaiUrl = `wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01`;
+      console.log('Connecting to OpenAI:', openaiUrl);
       
-      azureWs = new WebSocket(azureUrl, [], {
+      azureWs = new WebSocket(openaiUrl, [], {
         headers: {
-          'api-key': AZURE_OPENAI_API_KEY,
+          'Authorization': `Bearer ${OPENAI_API_KEY}`,
         }
       });
 
       azureWs.onopen = () => {
-        console.log('Connected to Azure OpenAI Realtime API');
+        console.log('Connected to OpenAI Realtime API');
       };
 
       azureWs.onmessage = (event) => {
-        console.log('Message from Azure OpenAI:', event.data);
+        console.log('Message from OpenAI:', event.data);
         
         const data = JSON.parse(event.data);
         
@@ -81,18 +80,18 @@ serve(async (req) => {
       };
 
       azureWs.onerror = (error) => {
-        console.error('Azure OpenAI WebSocket error:', error);
-        socket.send(JSON.stringify({ type: 'error', error: 'Azure OpenAI connection failed' }));
+        console.error('OpenAI WebSocket error:', error);
+        socket.send(JSON.stringify({ type: 'error', error: 'OpenAI connection failed' }));
       };
 
       azureWs.onclose = () => {
-        console.log('Azure OpenAI WebSocket closed');
+        console.log('OpenAI WebSocket closed');
         socket.close();
       };
 
     } catch (error) {
-      console.error('Error connecting to Azure OpenAI:', error);
-      socket.send(JSON.stringify({ type: 'error', error: 'Failed to connect to Azure OpenAI' }));
+      console.error('Error connecting to OpenAI:', error);
+      socket.send(JSON.stringify({ type: 'error', error: 'Failed to connect to OpenAI' }));
     }
   };
 
