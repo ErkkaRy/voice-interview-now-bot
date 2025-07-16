@@ -145,14 +145,21 @@ class AudioQueue {
     const audioData = this.queue.shift()!;
 
     try {
+      console.log('Playing audio chunk, size:', audioData.length);
       const wavData = createWavFromPCM(audioData);
+      console.log('Created WAV data, size:', wavData.length);
+      
       const audioBuffer = await this.audioContext.decodeAudioData(wavData.buffer);
+      console.log('Decoded audio buffer, duration:', audioBuffer.duration);
       
       const source = this.audioContext.createBufferSource();
       source.buffer = audioBuffer;
       source.connect(this.audioContext.destination);
       
-      source.onended = () => this.playNext();
+      source.onended = () => {
+        console.log('Audio chunk ended, playing next');
+        this.playNext();
+      };
       source.start(0);
     } catch (error) {
       console.error('Error playing audio:', error);
@@ -183,6 +190,13 @@ export class RealtimeChat {
   async init(interviewQuestions: string[]) {
     try {
       this.audioContext = new AudioContext({ sampleRate: 24000 });
+      console.log('Audio context created, state:', this.audioContext.state);
+      
+      // Resume audio context if suspended
+      if (this.audioContext.state === 'suspended') {
+        await this.audioContext.resume();
+        console.log('Audio context resumed, new state:', this.audioContext.state);
+      }
       
       const wsUrl = `wss://jhjbvmyfzmjrfoodphuj.functions.supabase.co/functions/v1/realtime-chat`;
       console.log('Connecting to:', wsUrl);
@@ -190,25 +204,45 @@ export class RealtimeChat {
       this.ws = new WebSocket(wsUrl);
       
       this.ws.onopen = () => {
-        console.log('Connected to realtime chat');
-        // Send interview context after connection
-        this.sendInterviewContext(interviewQuestions);
+        console.log('WebSocket connected to edge function');
       };
 
       this.ws.onmessage = async (event) => {
         const data = JSON.parse(event.data);
-        console.log('Received message:', data);
+        console.log('Received message from server:', data.type, data);
         
-        this.onMessageCallback(data);
-        
-        if (data.type === 'response.audio.delta') {
+        if (data.type === 'session.created') {
+          console.log('Session created, sending configuration...');
+          this.sendSessionConfiguration(interviewQuestions);
+        } else if (data.type === 'session.updated') {
+          console.log('Session updated, starting audio recording...');
+          await this.startAudioRecording();
+          this.onMessageCallback({ type: 'ready' });
+        } else if (data.type === 'response.audio.delta') {
+          console.log('Received audio delta, playing...');
           const binaryString = atob(data.delta);
           const bytes = new Uint8Array(binaryString.length);
           for (let i = 0; i < binaryString.length; i++) {
             bytes[i] = binaryString.charCodeAt(i);
           }
           await playAudioData(this.audioContext!, bytes);
+        } else if (data.type === 'response.audio_transcript.delta') {
+          console.log('AI transcript:', data.delta);
+          this.onMessageCallback({
+            type: 'assistant.message',
+            content: data.delta
+          });
+        } else if (data.type === 'input_audio_buffer.speech_started') {
+          console.log('User speech started');
+          this.onMessageCallback({ type: 'user.speaking_started' });
+        } else if (data.type === 'input_audio_buffer.speech_stopped') {
+          console.log('User speech stopped');
+          this.onMessageCallback({ type: 'user.speaking_stopped' });
+        } else if (data.type === 'error') {
+          console.error('OpenAI error:', data.error);
         }
+        
+        this.onMessageCallback(data);
       };
 
       this.ws.onerror = (error) => {
@@ -219,7 +253,16 @@ export class RealtimeChat {
         console.log('WebSocket closed');
       };
 
-      // Start recording
+      
+    } catch (error) {
+      console.error('Error initializing chat:', error);
+      throw error;
+    }
+  }
+
+  private async startAudioRecording() {
+    try {
+      console.log('Starting audio recording...');
       this.recorder = new AudioRecorder((audioData) => {
         if (this.ws?.readyState === WebSocket.OPEN) {
           this.ws.send(JSON.stringify({
@@ -230,30 +273,41 @@ export class RealtimeChat {
       });
       
       await this.recorder.start();
-      
+      console.log('Audio recording started successfully');
     } catch (error) {
-      console.error('Error initializing chat:', error);
-      throw error;
+      console.error('Failed to start audio recording:', error);
+      this.onMessageCallback({ 
+        type: 'error', 
+        message: 'Mikrofonin käyttöoikeus vaaditaan äänikeskusteluun. Anna lupa selaimessa.' 
+      });
     }
   }
 
-  private sendInterviewContext(questions: string[]) {
+  private sendSessionConfiguration(questions: string[]) {
     if (this.ws?.readyState === WebSocket.OPEN) {
-      const contextMessage = {
-        type: 'conversation.item.create',
-        item: {
-          type: 'message',
-          role: 'system',
-          content: [
-            {
-              type: 'input_text',
-              text: `Haastattelukysymykset joita voit käyttää pohjana: ${questions.join(', ')}. Aloita haastattelu esittelemällä itsesi ja kysy ensimmäinen kysymys luonnollisesti.`
-            }
-          ]
+      console.log('Sending session configuration...');
+      const sessionUpdate = {
+        type: 'session.update',
+        session: {
+          modalities: ['text', 'audio'],
+          instructions: `Sinä olet haastattelija. Haastattelukysymykset joita voit käyttää pohjana: ${questions.join(', ')}. Aloita haastattelu esittelemällä itsesi ja kysy ensimmäinen kysymys luonnollisesti. Puhu suomea.`,
+          voice: 'alloy',
+          input_audio_format: 'pcm16',
+          output_audio_format: 'pcm16',
+          input_audio_transcription: {
+            model: 'whisper-1'
+          },
+          turn_detection: {
+            type: 'server_vad',
+            threshold: 0.5,
+            prefix_padding_ms: 300,
+            silence_duration_ms: 1000
+          },
+          temperature: 0.8,
+          max_response_output_tokens: 'inf'
         }
       };
-      this.ws.send(JSON.stringify(contextMessage));
-      this.ws.send(JSON.stringify({ type: 'response.create' }));
+      this.ws.send(JSON.stringify(sessionUpdate));
     }
   }
 
