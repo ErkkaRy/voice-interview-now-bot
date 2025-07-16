@@ -198,7 +198,7 @@ export class RealtimeChat {
         console.log('Audio context resumed, new state:', this.audioContext.state);
       }
       
-      const wsUrl = `wss://jhjbvmyfzmjrfoodphuj.functions.supabase.co/functions/v1/realtime-chat`;
+      const wsUrl = `wss://jhjbvmyfzmjrfoodphuj.supabase.co/functions/v1/realtime-chat`;
       console.log('Connecting to:', wsUrl);
       
       this.ws = new WebSocket(wsUrl);
