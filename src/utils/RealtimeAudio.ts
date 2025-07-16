@@ -215,8 +215,30 @@ export class RealtimeChat {
           console.log('Session created, sending configuration...');
           this.sendSessionConfiguration(interviewQuestions);
         } else if (data.type === 'session.updated') {
-          console.log('Session updated, starting audio recording...');
+          console.log('Session updated, starting audio recording and initial greeting');
           await this.startAudioRecording();
+          
+          // Send initial greeting from assistant
+          console.log('Sending initial greeting from assistant');
+          this.ws?.send(JSON.stringify({
+            type: 'conversation.item.create',
+            item: {
+              type: 'message',
+              role: 'assistant',
+              content: [
+                {
+                  type: 'text',
+                  text: 'Hei! Olen haastattelija. Aloitetaan haastattelu - kerro vapaasti ajatuksiasi.'
+                }
+              ]
+            }
+          }));
+          
+          // Trigger response generation
+          this.ws?.send(JSON.stringify({
+            type: 'response.create'
+          }));
+          
           this.onMessageCallback({ type: 'ready' });
         } else if (data.type === 'response.audio.delta') {
           console.log('Received audio delta, playing...');
