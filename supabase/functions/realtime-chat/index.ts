@@ -11,11 +11,10 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const AZURE_OPENAI_API_KEY = Deno.env.get('AZURE_OPENAI_API_KEY');
-  const AZURE_OPENAI_ENDPOINT = Deno.env.get('AZURE_OPENAI_ENDPOINT');
+  const AZURE_API_KEY = Deno.env.get('AZURE_API_KEY');
   
-  if (!AZURE_OPENAI_API_KEY || !AZURE_OPENAI_ENDPOINT) {
-    return new Response(JSON.stringify({ error: 'Azure OpenAI credentials not configured' }), {
+  if (!AZURE_API_KEY) {
+    return new Response(JSON.stringify({ error: 'Azure OpenAI API key not configured' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
@@ -31,12 +30,12 @@ serve(async (req) => {
     
     try {
       // Connect to Azure OpenAI Realtime API
-      const azureUrl = `wss://${AZURE_OPENAI_ENDPOINT.replace('https://', '')}/openai/realtime?api-version=2024-10-01-preview&deployment=gpt-4o-realtime-preview`;
+      const azureUrl = `wss://erkka-ma03prm3-eastus2.cognitiveservices.azure.com/openai/realtime?api-version=2025-04-01-preview&deployment=gpt-4o-realtime-preview`;
       console.log('Connecting to Azure OpenAI:', azureUrl);
       
       azureWs = new WebSocket(azureUrl, [], {
         headers: {
-          'api-key': AZURE_OPENAI_API_KEY,
+          'api-key': AZURE_API_KEY,
         }
       });
 
