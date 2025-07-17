@@ -198,10 +198,22 @@ export class RealtimeChat {
         console.log('Audio context resumed, new state:', this.audioContext.state);
       }
       
-      const wsUrl = `wss://jhjbvmyfzmjrfoodphuj.supabase.co/functions/v1/realtime-chat`;
-      console.log('Connecting to:', wsUrl);
+      // Connect directly to Azure OpenAI Realtime API
+      const azureUrl = `wss://erkka-ma03prm3-eastus2.cognitiveservices.azure.com/openai/realtime?api-version=2024-10-01-preview&deployment=gpt-4o-realtime-preview`;
+      console.log('Connecting directly to Azure OpenAI:', azureUrl);
       
-      this.ws = new WebSocket(wsUrl);
+      // Get Azure API key (prompt user to add it if missing)  
+      let azureApiKey = localStorage.getItem('AZURE_API_KEY');
+      if (!azureApiKey) {
+        azureApiKey = prompt('Syötä Azure OpenAI API avain:');
+        if (!azureApiKey) {
+          throw new Error('Azure API avain vaaditaan voice chat -toiminnallisuuteen.');
+        }
+        localStorage.setItem('AZURE_API_KEY', azureApiKey);
+      }
+      
+      const wsUrlWithKey = `${azureUrl}&api-key=${azureApiKey}`;
+      this.ws = new WebSocket(wsUrlWithKey);
       
       this.ws.onopen = () => {
         console.log('WebSocket connected to edge function');
