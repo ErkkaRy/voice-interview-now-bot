@@ -64,16 +64,29 @@ const InterviewLauncher = ({ interviews, isLoading, onEditInterview }: Interview
     }
   };
 
-  const testInterview = {
-    title: "Voice Chat Testi",
-    questions: ["Kerro itsestäsi", "Mikä on vahvuutesi?", "Miksi hakeutuisit tähän työhön?"]
+  const getTestInterview = () => {
+    if (selectedInterview) {
+      const interview = interviews.find(i => i.id === selectedInterview);
+      if (interview) {
+        return {
+          title: interview.title,
+          questions: interview.questions
+        };
+      }
+    }
+    
+    // Fallback to default test questions
+    return {
+      title: "Voice Chat Testi",
+      questions: ["Kerro itsestäsi", "Mikä on vahvuutesi?", "Miksi hakeutuisit tähän työhön?"]
+    };
   };
 
   return (
     <>
       {showVoiceTest && (
         <VoiceChat 
-          interview={testInterview}
+          interview={getTestInterview()}
           onClose={() => setShowVoiceTest(false)}
         />
       )}
@@ -151,6 +164,7 @@ const InterviewLauncher = ({ interviews, isLoading, onEditInterview }: Interview
           onClick={() => setShowVoiceTest(true)}
           className="w-full bg-blue-600 hover:bg-blue-700 mb-4"
           variant="outline"
+          disabled={!selectedInterview}
         >
           <Mic className="h-4 w-4 mr-2" />
           Testaa voice chat
