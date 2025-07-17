@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Phone, MessageSquare, Loader2, Edit } from "lucide-react";
+import { Phone, MessageSquare, Loader2, Edit, Mic } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -131,6 +131,16 @@ const InterviewLauncher = ({ interviews, isLoading, onEditInterview }: Interview
             Syötä numero kansainvälisessä muodossa (esim. +358501234567)
           </p>
         </div>
+
+        {/* Test Voice Chat Button */}
+        <Button 
+          onClick={() => window.open('/#voice-test', '_blank')}
+          className="w-full bg-blue-600 hover:bg-blue-700 mb-4"
+          variant="outline"
+        >
+          <Mic className="h-4 w-4 mr-2" />
+          Testaa voice chat
+        </Button>
 
         {/* Launch Button */}
         <Button 
