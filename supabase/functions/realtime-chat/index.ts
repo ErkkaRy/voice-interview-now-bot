@@ -7,36 +7,47 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  console.log('=== EDGE FUNCTION STARTED ===');
+  console.log('Request method:', req.method);
+  console.log('Request headers:', Object.fromEntries(req.headers.entries()));
+  
   if (req.method === 'OPTIONS') {
+    console.log('Handling CORS preflight');
     return new Response(null, { headers: corsHeaders });
   }
 
   const AZURE_API_KEY = Deno.env.get('AZURE_API_KEY');
+  console.log('Azure API key exists:', !!AZURE_API_KEY);
   
   if (!AZURE_API_KEY) {
+    console.log('ERROR: No Azure API key configured');
     return new Response(JSON.stringify({ error: 'Azure OpenAI API key not configured' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
 
-  console.log('Starting WebSocket connection to Azure OpenAI Realtime API');
+  console.log('Starting WebSocket upgrade...');
   
-  const { socket, response } = Deno.upgradeWebSocket(req);
-  let azureWs: WebSocket | null = null;
+  try {
+    const { socket, response } = Deno.upgradeWebSocket(req);
+    console.log('WebSocket upgrade successful');
+    let azureWs: WebSocket | null = null;
 
   socket.onopen = async () => {
-    console.log('Client WebSocket opened');
+    console.log('=== CLIENT WEBSOCKET OPENED ===');
     
     try {
       // Connect to Azure OpenAI Realtime API with api-key in URL
       const azureUrl = `wss://erkka-ma03prm3-eastus2.cognitiveservices.azure.com/openai/realtime?api-version=2024-10-01-preview&deployment=gpt-4o-realtime-preview&api-key=${AZURE_API_KEY}`;
-      console.log('Connecting to Azure OpenAI (with api-key in URL)');
+      console.log('Attempting to connect to Azure OpenAI...');
+      console.log('Azure URL (without key):', azureUrl.replace(/api-key=[^&]*/, 'api-key=***'));
       
       azureWs = new WebSocket(azureUrl);
+      console.log('Azure WebSocket created, waiting for connection...');
 
       azureWs.onopen = () => {
-        console.log('Connected to Azure OpenAI Realtime API');
+        console.log('=== AZURE WEBSOCKET CONNECTED SUCCESSFULLY ===');
       };
 
       azureWs.onmessage = (event) => {
@@ -76,18 +87,24 @@ serve(async (req) => {
       };
 
       azureWs.onerror = (error) => {
-        console.error('Azure OpenAI WebSocket error:', error);
-        socket.send(JSON.stringify({ type: 'error', error: 'Azure OpenAI connection failed' }));
+        console.error('=== AZURE WEBSOCKET ERROR ===');
+        console.error('Azure WebSocket error details:', error);
+        console.error('Azure WebSocket readyState:', azureWs?.readyState);
+        socket.send(JSON.stringify({ type: 'error', error: 'Azure OpenAI connection failed', details: String(error) }));
       };
 
-      azureWs.onclose = () => {
-        console.log('Azure OpenAI WebSocket closed');
+      azureWs.onclose = (event) => {
+        console.log('=== AZURE WEBSOCKET CLOSED ===');
+        console.log('Close code:', event.code);
+        console.log('Close reason:', event.reason);
+        console.log('Was clean:', event.wasClean);
         socket.close();
       };
 
     } catch (error) {
-      console.error('Error connecting to Azure OpenAI:', error);
-      socket.send(JSON.stringify({ type: 'error', error: 'Failed to connect to Azure OpenAI' }));
+      console.error('=== ERROR CONNECTING TO AZURE ===');
+      console.error('Error details:', error);
+      socket.send(JSON.stringify({ type: 'error', error: 'Failed to connect to Azure OpenAI', details: String(error) }));
     }
   };
 
@@ -106,11 +123,22 @@ serve(async (req) => {
   };
 
   socket.onerror = (error) => {
+    console.error('=== CLIENT WEBSOCKET ERROR ===');
     console.error('Client WebSocket error:', error);
     if (azureWs) {
       azureWs.close();
     }
   };
 
+  console.log('Returning WebSocket response...');
   return response;
+  
+  } catch (error) {
+    console.error('=== WEBSOCKET UPGRADE FAILED ===');
+    console.error('Upgrade error:', error);
+    return new Response(JSON.stringify({ error: 'WebSocket upgrade failed', details: String(error) }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
 });
