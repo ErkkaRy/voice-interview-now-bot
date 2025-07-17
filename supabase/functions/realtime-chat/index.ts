@@ -29,15 +29,11 @@ serve(async (req) => {
     console.log('Client WebSocket opened');
     
     try {
-      // Connect to Azure OpenAI Realtime API
-      const azureUrl = `wss://erkka-ma03prm3-eastus2.cognitiveservices.azure.com/openai/realtime?api-version=2025-04-01-preview&deployment=gpt-4o-realtime-preview`;
-      console.log('Connecting to Azure OpenAI:', azureUrl);
+      // Connect to Azure OpenAI Realtime API with api-key in URL
+      const azureUrl = `wss://erkka-ma03prm3-eastus2.cognitiveservices.azure.com/openai/realtime?api-version=2024-10-01-preview&deployment=gpt-4o-realtime-preview&api-key=${AZURE_API_KEY}`;
+      console.log('Connecting to Azure OpenAI (with api-key in URL)');
       
-      azureWs = new WebSocket(azureUrl, [], {
-        headers: {
-          'api-key': AZURE_API_KEY,
-        }
-      });
+      azureWs = new WebSocket(azureUrl);
 
       azureWs.onopen = () => {
         console.log('Connected to Azure OpenAI Realtime API');
