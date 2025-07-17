@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Phone, MessageSquare, Loader2, Edit, Mic } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { VoiceChat } from "@/components/VoiceChat";
 
 interface InterviewLauncherProps {
   interviews: any[];
@@ -18,6 +19,7 @@ const InterviewLauncher = ({ interviews, isLoading, onEditInterview }: Interview
   const [selectedInterview, setSelectedInterview] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [showVoiceTest, setShowVoiceTest] = useState(false);
   const { toast } = useToast();
 
   const handleSendInvite = async () => {
@@ -62,7 +64,19 @@ const InterviewLauncher = ({ interviews, isLoading, onEditInterview }: Interview
     }
   };
 
+  const testInterview = {
+    title: "Voice Chat Testi",
+    questions: ["Kerro itsestäsi", "Mikä on vahvuutesi?", "Miksi hakeutuisit tähän työhön?"]
+  };
+
   return (
+    <>
+      {showVoiceTest && (
+        <VoiceChat 
+          interview={testInterview}
+          onClose={() => setShowVoiceTest(false)}
+        />
+      )}
     <Card className="border-0 shadow-lg bg-white/80 backdrop-blur">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
@@ -134,7 +148,7 @@ const InterviewLauncher = ({ interviews, isLoading, onEditInterview }: Interview
 
         {/* Test Voice Chat Button */}
         <Button 
-          onClick={() => window.open('/#voice-test', '_blank')}
+          onClick={() => setShowVoiceTest(true)}
           className="w-full bg-blue-600 hover:bg-blue-700 mb-4"
           variant="outline"
         >
@@ -162,6 +176,7 @@ const InterviewLauncher = ({ interviews, isLoading, onEditInterview }: Interview
         </Button>
       </CardContent>
     </Card>
+    </>
   );
 };
 
