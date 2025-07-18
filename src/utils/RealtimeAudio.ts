@@ -198,22 +198,66 @@ export class RealtimeChat {
         console.log('Audio context resumed, new state:', this.audioContext.state);
       }
       
-      // Connect to Supabase Edge Function instead of direct Azure connection
-      const wsUrl = `wss://jhjbvmyfzmjrfoodphuj.functions.supabase.co/functions/v1/realtime-chat`;
-      console.log('Connecting to Supabase Edge Function:', wsUrl);
+      // Get Azure API key from Supabase
+      const response = await fetch('https://jhjbvmyfzmjrfoodphuj.functions.supabase.co/functions/v1/get-azure-key');
+      const { apiKey } = await response.json();
       
-      this.ws = new WebSocket(wsUrl);
+      if (!apiKey) {
+        throw new Error('Failed to get Azure API key');
+      }
+
+      // Connect directly to Azure OpenAI
+      const azureUrl = `wss://erkka-ma03prm3-eastus2.cognitiveservices.azure.com/openai/realtime?api-version=2024-10-01-preview&deployment=gpt-4o-realtime-preview&api-key=${apiKey}`;
+      console.log('Connecting directly to Azure OpenAI...');
+      
+      this.ws = new WebSocket(azureUrl);
       
       this.ws.onopen = () => {
-        console.log('WebSocket connected to edge function');
+        console.log('Connected directly to Azure OpenAI');
       };
 
       this.ws.onmessage = async (event) => {
         const data = JSON.parse(event.data);
-        console.log('Received message from server:', data.type, data);
+        console.log('Received message from Azure OpenAI:', data.type, data);
         
+        // Handle session.created event - send configuration
         if (data.type === 'session.created') {
-          console.log('Session created, starting audio recording');
+          console.log('Session created, sending configuration');
+          const sessionUpdate = {
+            type: 'session.update',
+            session: {
+              modalities: ["text", "audio"],
+              instructions: `Olet avulias ja keskusteleva suomenkielinen haastattelija. Toimi seuraavasti:
+
+1. Aloita tervehtimällä lämpimästi ja kerro mistä haastattelusta on kyse
+2. Kysele haastattelukysymyksiä luonnollisesti keskustellen - älä lue niitä robotin tavoin
+3. Kuuntele vastauksia tarkasti ja kysy tarkentavia jatkokysymyksiä
+4. Jos joku vastaa negatiivisesti (esim. "ruoka ei ollut hyvää" tai "menu ei ollut riittävän laaja"), kysy aina: "Mitä puuttui?" tai "Voisitko kertoa tarkemmin?"
+5. Ole kiinnostunut ja empaattinen
+6. Pidä keskustelu sujuvana ja luonnollisena
+7. Kysy yksi kysymys kerrallaan
+8. Voit kommentoida vastauksia lyhyesti ennen seuraavaa kysymystä
+
+Haastattelukysymykset joita voit käyttää pohjana, mutta sovella niitä tilanteeseen sopivaksi ja tee tarkentavia kysymyksiä vastausten perusteella.`,
+              voice: "alloy",
+              input_audio_format: "pcm16",
+              output_audio_format: "pcm16",
+              input_audio_transcription: {
+                model: "whisper-1"
+              },
+              turn_detection: {
+                type: "server_vad",
+                threshold: 0.5,
+                prefix_padding_ms: 300,
+                silence_duration_ms: 1000
+              },
+              temperature: 0.8,
+              max_response_output_tokens: "inf"
+            }
+          };
+          this.ws?.send(JSON.stringify(sessionUpdate));
+          
+          // Start audio recording after session is configured
           await this.startAudioRecording();
           this.onMessageCallback({ type: 'ready' });
         } else if (data.type === 'response.audio.delta') {
@@ -247,8 +291,8 @@ export class RealtimeChat {
         console.error('WebSocket error:', error);
       };
 
-      this.ws.onclose = () => {
-        console.log('WebSocket closed');
+      this.ws.onclose = (event) => {
+        console.log('WebSocket closed:', event.code, event.reason);
       };
       
     } catch (error) {
