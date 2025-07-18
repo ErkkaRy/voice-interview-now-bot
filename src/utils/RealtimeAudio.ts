@@ -1,3 +1,5 @@
+import { supabase } from "@/integrations/supabase/client";
+
 export class AudioRecorder {
   private stream: MediaStream | null = null;
   private audioContext: AudioContext | null = null;
@@ -199,12 +201,19 @@ export class RealtimeChat {
       }
       
       // Get Azure API key from Supabase
-      const response = await fetch('https://jhjbvmyfzmjrfoodphuj.functions.supabase.co/functions/v1/get-azure-key');
-      const { apiKey } = await response.json();
+      const { data, error } = await supabase.functions.invoke('get-azure-key');
       
-      if (!apiKey) {
-        throw new Error('Failed to get Azure API key');
+      if (error) {
+        console.error('Error invoking get-azure-key function:', error);
+        throw new Error(`Failed to get Azure API key: ${error.message}`);
       }
+      
+      if (!data?.apiKey) {
+        console.error('No API key in response:', data);
+        throw new Error('Failed to get Azure API key: No key returned');
+      }
+      
+      const apiKey = data.apiKey;
 
       // Connect directly to Azure OpenAI
       const azureUrl = `wss://erkka-ma03prm3-eastus2.cognitiveservices.azure.com/openai/realtime?api-version=2024-10-01-preview&deployment=gpt-4o-realtime-preview&api-key=${apiKey}`;
