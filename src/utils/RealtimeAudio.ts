@@ -198,22 +198,11 @@ export class RealtimeChat {
         console.log('Audio context resumed, new state:', this.audioContext.state);
       }
       
-      // Connect directly to Azure OpenAI Realtime API
-      const azureUrl = `wss://erkka-ma03prm3-eastus2.cognitiveservices.azure.com/openai/realtime?api-version=2024-10-01-preview&deployment=gpt-4o-realtime-preview`;
-      console.log('Connecting directly to Azure OpenAI:', azureUrl);
+      // Connect to Supabase Edge Function instead of direct Azure connection
+      const wsUrl = `wss://jhjbvmyfzmjrfoodphuj.functions.supabase.co/realtime-chat`;
+      console.log('Connecting to Supabase Edge Function:', wsUrl);
       
-      // Get Azure API key (prompt user to add it if missing)  
-      let azureApiKey = localStorage.getItem('AZURE_API_KEY');
-      if (!azureApiKey) {
-        azureApiKey = prompt('Syötä Azure OpenAI API avain:');
-        if (!azureApiKey) {
-          throw new Error('Azure API avain vaaditaan voice chat -toiminnallisuuteen.');
-        }
-        localStorage.setItem('AZURE_API_KEY', azureApiKey);
-      }
-      
-      const wsUrlWithKey = `${azureUrl}&api-key=${azureApiKey}`;
-      this.ws = new WebSocket(wsUrlWithKey);
+      this.ws = new WebSocket(wsUrl);
       
       this.ws.onopen = () => {
         console.log('WebSocket connected to edge function');
@@ -224,33 +213,8 @@ export class RealtimeChat {
         console.log('Received message from server:', data.type, data);
         
         if (data.type === 'session.created') {
-          console.log('Session created, sending configuration...');
-          this.sendSessionConfiguration(interviewQuestions);
-        } else if (data.type === 'session.updated') {
-          console.log('Session updated, starting audio recording and initial greeting');
+          console.log('Session created, starting audio recording');
           await this.startAudioRecording();
-          
-          // Send initial greeting from assistant
-          console.log('Sending initial greeting from assistant');
-          this.ws?.send(JSON.stringify({
-            type: 'conversation.item.create',
-            item: {
-              type: 'message',
-              role: 'assistant',
-              content: [
-                {
-                  type: 'text',
-                  text: 'Hei! Olen haastattelija. Aloitetaan haastattelu - kerro vapaasti ajatuksiasi.'
-                }
-              ]
-            }
-          }));
-          
-          // Trigger response generation
-          this.ws?.send(JSON.stringify({
-            type: 'response.create'
-          }));
-          
           this.onMessageCallback({ type: 'ready' });
         } else if (data.type === 'response.audio.delta') {
           console.log('Received audio delta, playing...');
@@ -286,7 +250,6 @@ export class RealtimeChat {
       this.ws.onclose = () => {
         console.log('WebSocket closed');
       };
-
       
     } catch (error) {
       console.error('Error initializing chat:', error);
@@ -314,34 +277,6 @@ export class RealtimeChat {
         type: 'error', 
         message: 'Mikrofonin käyttöoikeus vaaditaan äänikeskusteluun. Anna lupa selaimessa.' 
       });
-    }
-  }
-
-  private sendSessionConfiguration(questions: string[]) {
-    if (this.ws?.readyState === WebSocket.OPEN) {
-      console.log('Sending session configuration...');
-      const sessionUpdate = {
-        type: 'session.update',
-        session: {
-          modalities: ['text', 'audio'],
-          instructions: `Sinä olet haastattelija. Haastattelukysymykset joita voit käyttää pohjana: ${questions.join(', ')}. Aloita haastattelu esittelemällä itsesi ja kysy ensimmäinen kysymys luonnollisesti. Puhu suomea.`,
-          voice: 'alloy',
-          input_audio_format: 'pcm16',
-          output_audio_format: 'pcm16',
-          input_audio_transcription: {
-            model: 'whisper-1'
-          },
-          turn_detection: {
-            type: 'server_vad',
-            threshold: 0.5,
-            prefix_padding_ms: 300,
-            silence_duration_ms: 1000
-          },
-          temperature: 0.8,
-          max_response_output_tokens: 'inf'
-        }
-      };
-      this.ws.send(JSON.stringify(sessionUpdate));
     }
   }
 

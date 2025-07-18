@@ -14,17 +14,17 @@ serve(async (req) => {
 
   try {
     const url = new URL(req.url);
-    const callId = url.searchParams.get('callId');
+    const interviewId = url.searchParams.get('interviewId');
+    const from = url.searchParams.get('from');
     const formData = await req.formData();
     
-    const recordingUrl = formData.get('RecordingUrl');
-    const recordingSid = formData.get('RecordingSid');
+    const speechResult = formData.get('SpeechResult');
     const callSid = formData.get('CallSid');
     
-    console.log('Recording received:', { callId, recordingUrl, recordingSid });
+    console.log('Speech received:', { interviewId, from, speechResult, callSid });
 
-    if (!callId) {
-      throw new Error('Call ID is required');
+    if (!interviewId) {
+      throw new Error('Interview ID is required');
     }
 
     // Initialize Supabase client
@@ -33,114 +33,85 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    // Get call and interview details
-    const { data: call, error: callError } = await supabase
-      .from('calls')
-      .select('*, interviews(*)')
-      .eq('id', callId)
+    // Get interview details
+    const { data: interview, error: interviewError } = await supabase
+      .from('interviews')
+      .select('*')
+      .eq('id', interviewId)
       .single();
 
-    if (callError || !call) {
-      throw new Error('Call not found');
+    if (interviewError || !interview) {
+      throw new Error('Interview not found');
     }
 
-    // Download and transcribe audio using Azure OpenAI Whisper
-    let transcription = '';
-    if (recordingUrl) {
-      try {
-        // Download audio file
-        const audioResponse = await fetch(recordingUrl + '.wav');
-        const audioBuffer = await audioResponse.arrayBuffer();
-        
-        // Transcribe using Azure OpenAI Whisper
-        const whisperFormData = new FormData();
-        whisperFormData.append('file', new Blob([audioBuffer], { type: 'audio/wav' }), 'audio.wav');
-        whisperFormData.append('model', 'whisper-1');
-        
-        const whisperResponse = await fetch(
-          `${Deno.env.get('AZURE_OPENAI_ENDPOINT')}/openai/deployments/whisper-1/audio/transcriptions?api-version=2024-02-15-preview`,
-          {
-            method: 'POST',
-            headers: {
-              'api-key': Deno.env.get('AZURE_OPENAI_API_KEY')!,
-            },
-            body: whisperFormData,
-          }
-        );
-        
-        if (whisperResponse.ok) {
-          const whisperData = await whisperResponse.json();
-          transcription = whisperData.text || '';
-          console.log('Transcription:', transcription);
-        }
-      } catch (error) {
-        console.error('Transcription error:', error);
-      }
-    }
+    // Get user's speech input
+    const userInput = speechResult || '';
+    console.log('User input:', userInput);
 
-    // Get conversation history
-    const conversation = call.conversation || [];
+    // Simulate conversation state (in production, you'd store this in database)
+    let conversation = [];
     
     // Add user's response to conversation
-    if (transcription) {
+    if (userInput) {
       conversation.push({
         role: 'user',
-        content: transcription,
+        content: userInput,
         timestamp: new Date().toISOString()
       });
     }
 
     // Generate AI response using Azure OpenAI
-    const questions = call.interviews.questions || [];
-    const currentQuestionIndex = conversation.filter(msg => msg.role === 'assistant').length;
+    const questions = interview.questions || [];
     
     let aiResponse = '';
-    let nextQuestion = '';
     
-    if (currentQuestionIndex < questions.length) {
-      nextQuestion = questions[currentQuestionIndex];
-      
-      // Create context for AI
-      const systemPrompt = `Olet ammattimainen haastattelija. Tehtäväsi on esittää haastattelukysymyksiä ja reagoida haastateltavan vastauksiin luonnollisesti. 
-      
-Seuraava kysymys on: "${nextQuestion}"
+    // Create enhanced conversational prompt
+    const systemPrompt = `Olet avulias ja keskusteleva suomenkielinen haastattelija. Toimi seuraavasti:
 
-Vastaa lyhyesti ja ystävällisesti haastateltavan edelliseen vastaukseen, ja esitä sitten seuraava kysymys. Pidä vastaus alle 100 sanaa.`;
+1. Jos tämä on ensimmäinen vastaus, tervehdi lämpimästi ja aloita haastattelukysymyksillä
+2. Kuuntele vastauksia tarkasti ja kysy tarkentavia jatkokysymyksiä
+3. Jos joku vastaa negatiivisesti (esim. "ruoka ei ollut hyvää" tai "menu ei ollut riittävän laaja"), kysy aina: "Mitä puuttui?" tai "Voisitko kertoa tarkemmin?"
+4. Ole kiinnostunut ja empaattinen
+5. Pidä keskustelu sujuvana ja luonnollisena
+6. Kysy yksi kysymys kerrallaan
+7. Voit kommentoida vastauksia lyhyesti ennen seuraavaa kysymystä
+8. Pidä vastaukset alle 50 sanaa
 
-      const messages = [
-        { role: 'system', content: systemPrompt },
-        ...conversation.slice(-4), // Last 4 messages for context
-      ];
+Haastattelukysymykset: ${questions.join(', ')}
 
-      try {
-        const aiApiResponse = await fetch(
-          `${Deno.env.get('AZURE_OPENAI_ENDPOINT')}/openai/deployments/${Deno.env.get('AZURE_OPENAI_DEPLOYMENT_NAME')}/chat/completions?api-version=2024-02-15-preview`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'api-key': Deno.env.get('AZURE_OPENAI_API_KEY')!,
-            },
-            body: JSON.stringify({
-              messages,
-              max_tokens: 150,
-              temperature: 0.7,
-            }),
-          }
-        );
+Käyttäjän viimeisin vastaus: "${userInput}"`;
 
-        if (aiApiResponse.ok) {
-          const aiData = await aiApiResponse.json();
-          aiResponse = aiData.choices[0]?.message?.content || nextQuestion;
-        } else {
-          aiResponse = nextQuestion;
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      ...conversation.slice(-2), // Last 2 messages for context
+    ];
+
+    try {
+      const aiApiResponse = await fetch(
+        `${Deno.env.get('AZURE_OPENAI_ENDPOINT')}/openai/deployments/${Deno.env.get('AZURE_OPENAI_DEPLOYMENT_NAME')}/chat/completions?api-version=2024-02-15-preview`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'api-key': Deno.env.get('AZURE_OPENAI_API_KEY')!,
+          },
+          body: JSON.stringify({
+            messages,
+            max_tokens: 100,
+            temperature: 0.8,
+          }),
         }
-      } catch (error) {
-        console.error('AI API error:', error);
-        aiResponse = nextQuestion;
+      );
+
+      if (aiApiResponse.ok) {
+        const aiData = await aiApiResponse.json();
+        aiResponse = aiData.choices[0]?.message?.content || 'Kerro lisää.';
+      } else {
+        aiResponse = 'Kiintoisa. Kerro lisää.';
       }
-    } else {
-      aiResponse = 'Kiitos haastattelusta! Haastattelu on nyt päättynyt. Hyvää päivänjatkoa!';
+    } catch (error) {
+      console.error('AI API error:', error);
+      aiResponse = 'Kiintoisa. Kerro lisää.';
     }
 
     // Add AI response to conversation
@@ -150,49 +121,24 @@ Vastaa lyhyesti ja ystävällisesti haastateltavan edelliseen vastaukseen, ja es
       timestamp: new Date().toISOString()
     });
 
-    // Update call with conversation
-    await supabase
-      .from('calls')
-      .update({ 
-        conversation,
-        audio_recording_url: recordingUrl 
-      })
-      .eq('id', callId);
-
-    // Create TwiML response
-    const isLastQuestion = currentQuestionIndex >= questions.length - 1;
-    
+    // Create TwiML response with continued conversation
     let twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say voice="alice" language="fi-FI">${aiResponse}</Say>`;
-
-    if (!isLastQuestion) {
-      twiml += `
-  <Record 
-    timeout="3"
-    finishOnKey=""
-    maxLength="60"
-    playBeep="false"
-    recordingStatusCallback="${Deno.env.get('SUPABASE_URL')}/functions/v1/ai-conversation?callId=${callId}"
-    recordingStatusCallbackMethod="POST"
-  />
-  <Say voice="alice" language="fi-FI">En kuullut vastausta. Siirryn seuraavaan kysymykseen.</Say>`;
-    } else {
-      // Mark call as completed
-      await supabase
-        .from('calls')
-        .update({ 
-          status: 'completed',
-          completed_at: new Date().toISOString()
-        })
-        .eq('id', callId);
-      
-      twiml += `
-  <Pause length="1"/>
-  <Hangup/>`;
-    }
-
-    twiml += `
+  <Say voice="alice" language="fi-FI">${aiResponse}</Say>
+  <Gather 
+    input="speech"
+    timeout="10"
+    speechTimeout="3"
+    speechModel="phone_call"
+    enhanced="true"
+    language="fi-FI"
+    action="${Deno.env.get('SUPABASE_URL')}/functions/v1/ai-conversation?interviewId=${interviewId}&from=${from}"
+    method="POST"
+  >
+    <Say voice="alice" language="fi-FI">Kuuntelen...</Say>
+  </Gather>
+  <Say voice="alice" language="fi-FI">Kiitos haastattelusta! Hyvää päivänjatkoa.</Say>
+  <Hangup/>
 </Response>`;
 
     return new Response(twiml, {

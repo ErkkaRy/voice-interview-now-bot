@@ -53,20 +53,24 @@ serve(async (req) => {
 
     console.log('Starting interview:', interview.title);
 
-    // Create TwiML response to start the interview
-    const webhookUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/ai-conversation`;
+    // Create TwiML response with voice chat support
+    const gatherUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/ai-conversation`;
     
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say voice="alice" language="fi-FI">Hei! Aloitetaan haastattelu ${interview.title}. Kuuntelen sinua nyt.</Say>
-  <Record 
-    timeout="3"
-    finishOnKey=""
-    maxLength="30"
-    playBeep="false"
-    recordingStatusCallback="${webhookUrl}?interviewId=${interview.id}&from=${from}"
-    recordingStatusCallbackMethod="POST"
-  />
+  <Say voice="alice" language="fi-FI">Hei! Aloitetaan haastattelu ${interview.title}. Vastaa kysymyksiin luonnollisesti.</Say>
+  <Gather 
+    input="speech"
+    timeout="10"
+    speechTimeout="3"
+    speechModel="phone_call"
+    enhanced="true"
+    language="fi-FI"
+    action="${gatherUrl}?interviewId=${interview.id}&from=${from}"
+    method="POST"
+  >
+    <Say voice="alice" language="fi-FI">Kuuntelen sinua nyt...</Say>
+  </Gather>
   <Say voice="alice" language="fi-FI">En kuullut vastausta. Lopetan puhelun.</Say>
   <Hangup/>
 </Response>`;
