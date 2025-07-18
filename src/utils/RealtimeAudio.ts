@@ -199,7 +199,7 @@ export class RealtimeChat {
       }
       
       // Connect to Supabase Edge Function instead of direct Azure connection
-      const wsUrl = `wss://jhjbvmyfzmjrfoodphuj.functions.supabase.co/realtime-chat`;
+      const wsUrl = `wss://jhjbvmyfzmjrfoodphuj.functions.supabase.co/functions/v1/realtime-chat`;
       console.log('Connecting to Supabase Edge Function:', wsUrl);
       
       this.ws = new WebSocket(wsUrl);
