@@ -242,18 +242,19 @@ export class RealtimeChat {
             type: 'session.update',
             session: {
               modalities: ["text", "audio"],
-              instructions: `Olet avulias ja keskusteleva suomenkielinen haastattelija. Toimi seuraavasti:
+              instructions: `Olet suomenkielinen haastattelija. Tärkeää:
 
-1. Aloita tervehtimällä lämpimästi ja kerro mistä haastattelusta on kyse
-2. Kysele haastattelukysymyksiä luonnollisesti keskustellen - älä lue niitä robotin tavoin
-3. Kuuntele vastauksia tarkasti ja kysy tarkentavia jatkokysymyksiä
-4. Jos joku vastaa negatiivisesti (esim. "ruoka ei ollut hyvää" tai "menu ei ollut riittävän laaja"), kysy aina: "Mitä puuttui?" tai "Voisitko kertoa tarkemmin?"
-5. Ole kiinnostunut ja empaattinen
-6. Pidä keskustelu sujuvana ja luonnollisena
-7. Kysy yksi kysymys kerrallaan
-8. Voit kommentoida vastauksia lyhyesti ennen seuraavaa kysymystä
+KÄYTÄ NÄITÄ HAASTATTELUKYSYMYKSIÄ:
+${interviewQuestions.map((q, i) => `${i + 1}. ${q}`).join('\n')}
 
-Haastattelukysymykset joita voit käyttää pohjana, mutta sovella niitä tilanteeseen sopivaksi ja tee tarkentavia kysymyksiä vastausten perusteella.`,
+OHJEET:
+- Aloita tervehtimällä ja kerro että kyseessä on haastattelu
+- Kysele yllä olevia kysymyksiä järjestyksessä
+- Kuuntele vastauksia ja tee tarkentavia kysymyksiä
+- Siirry seuraavaan kysymykseen kun saat riittävän vastauksen
+- Ole luonnollinen ja keskusteleva
+- Pidä vastaukset lyhyinä (alle 50 sanaa)
+- ÄLÄ keksi omia kysymyksiä, käytä vain yllä olevia`,
               voice: "alloy",
               input_audio_format: "pcm16",
               output_audio_format: "pcm16",
