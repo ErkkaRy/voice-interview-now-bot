@@ -96,6 +96,10 @@ ${userInput ? 'Kommentoi vastausta ja kysy seuraava kysymys listalta.' : `Aloita
     ];
 
     try {
+      console.log('Attempting Azure OpenAI call with endpoint:', Deno.env.get('AZURE_OPENAI_ENDPOINT'));
+      console.log('Deployment name:', Deno.env.get('AZURE_OPENAI_DEPLOYMENT_NAME'));
+      console.log('API key exists:', !!Deno.env.get('AZURE_OPENAI_API_KEY'));
+      
       const aiApiResponse = await fetch(
         `${Deno.env.get('AZURE_OPENAI_ENDPOINT')}/openai/deployments/${Deno.env.get('AZURE_OPENAI_DEPLOYMENT_NAME')}/chat/completions?api-version=2024-02-15-preview`,
         {
@@ -111,6 +115,8 @@ ${userInput ? 'Kommentoi vastausta ja kysy seuraava kysymys listalta.' : `Aloita
           }),
         }
       );
+      
+      console.log('Azure OpenAI response status:', aiApiResponse.status);
 
       if (aiApiResponse.ok) {
         const aiData = await aiApiResponse.json();
