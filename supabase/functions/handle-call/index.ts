@@ -106,6 +106,10 @@ serve(async (req) => {
   <Hangup/>
 </Response>`;
 
+    console.log('Generated TwiML:', twiml);
+    console.log('TwiML length:', twiml.length);
+    console.log('Returning TwiML with Content-Type: text/xml');
+
     return new Response(twiml, {
       headers: { ...corsHeaders, 'Content-Type': 'text/xml' }
     });
