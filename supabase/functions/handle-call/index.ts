@@ -13,7 +13,10 @@ serve(async (req) => {
   }
 
   try {
+    console.log('=== HANDLE-CALL FUNCTION START ===');
     const formData = await req.formData();
+    console.log('FormData received successfully');
+    
     const callSid = formData.get('CallSid');
     const from = formData.get('From');
     const to = formData.get('To');
@@ -21,10 +24,12 @@ serve(async (req) => {
     console.log('Incoming call:', { callSid, from, to });
 
     // Initialize Supabase client
+    console.log('Initializing Supabase client...');
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
+    console.log('Supabase client initialized');
 
     console.log('Received call from:', from, 'to:', to);
 
