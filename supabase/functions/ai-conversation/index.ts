@@ -73,15 +73,15 @@ serve(async (req) => {
     let aiResponse = '';
     
     // Determine response based on current state
-    if (currentQuestionIndex < questions.length - 1) {
-      // Move to next question
-      currentQuestionIndex++;
+    if (currentQuestionIndex < questions.length) {
+      // Ask current question
       aiResponse = `Kiitos vastauksesta. ${questions[currentQuestionIndex]}`;
       
-      // Update conversation state
+      // Move to next question for next time
+      const nextIndex = currentQuestionIndex + 1;
       await supabase
         .from('conversations')
-        .update({ current_question_index: currentQuestionIndex })
+        .update({ current_question_index: nextIndex })
         .eq('call_sid', callSid);
         
     } else {
