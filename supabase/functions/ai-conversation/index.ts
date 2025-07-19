@@ -96,17 +96,22 @@ ${userInput ? 'Kommentoi vastausta ja kysy seuraava kysymys listalta.' : `Aloita
     ];
 
     try {
-      console.log('Attempting Azure OpenAI call with endpoint:', Deno.env.get('AZURE_OPENAI_ENDPOINT'));
-      console.log('Deployment name:', Deno.env.get('AZURE_OPENAI_DEPLOYMENT_NAME'));
-      console.log('API key exists:', !!Deno.env.get('AZURE_OPENAI_API_KEY'));
+      console.log('Making Azure OpenAI call...');
+      console.log('Azure API key exists:', !!Deno.env.get('AZURE_API_KEY'));
       
+      const azureApiKey = Deno.env.get('AZURE_API_KEY');
+      if (!azureApiKey) {
+        throw new Error('Azure API key not found');
+      }
+      
+      // Use the same endpoint as VoiceChat
       const aiApiResponse = await fetch(
-        `${Deno.env.get('AZURE_OPENAI_ENDPOINT')}/openai/deployments/${Deno.env.get('AZURE_OPENAI_DEPLOYMENT_NAME')}/chat/completions?api-version=2024-02-15-preview`,
+        'https://erkka-ma03prm3-eastus2.cognitiveservices.azure.com/openai/deployments/gpt-4o-realtime-preview/chat/completions?api-version=2024-02-15-preview',
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'api-key': Deno.env.get('AZURE_OPENAI_API_KEY')!,
+            'api-key': azureApiKey,
           },
           body: JSON.stringify({
             messages,
