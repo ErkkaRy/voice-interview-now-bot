@@ -82,7 +82,7 @@ serve(async (req) => {
     console.log('Starting interview:', interview.title);
 
     // Use traditional Gather approach instead of Stream for better compatibility
-    const gatherUrl = `https://jhjbvmyfzmjrfoodphuj.supabase.co/functions/v1/ai-conversation`;
+    const gatherUrl = `https://jhjbvmyfzmjrfoodphuj.supabase.co/functions/v1/ai-conversation?interviewId=${interview.id}&from=${encodeURIComponent(from)}`;
     
     console.log('Creating TwiML response with:', {
       interviewId: interview.id,

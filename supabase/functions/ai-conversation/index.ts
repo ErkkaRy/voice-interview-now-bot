@@ -144,6 +144,8 @@ serve(async (req) => {
     console.log('Generated AI response:', aiResponse);
 
     // Create TwiML response with continued conversation
+    const continueGatherUrl = `https://jhjbvmyfzmjrfoodphuj.supabase.co/functions/v1/ai-conversation?interviewId=${interviewId}&from=${encodeURIComponent(from || '')}`;
+    
     let twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Say voice="alice" language="fi-FI">${aiResponse}</Say>
@@ -154,7 +156,7 @@ serve(async (req) => {
     speechModel="phone_call"
     enhanced="true"
     language="fi-FI"
-    action="${Deno.env.get('SUPABASE_URL')}/functions/v1/ai-conversation?interviewId=${interviewId}&from=${from}"
+    action="${continueGatherUrl}"
     method="POST"
   />
   <Say voice="alice" language="fi-FI">En kuullut vastausta. Lopetan puhelun.</Say>
