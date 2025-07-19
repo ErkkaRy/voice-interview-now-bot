@@ -32,17 +32,17 @@ serve(async (req) => {
     let interview = null;
     let interviewError = null;
     
-    console.log('Looking for interview invitation for phone:', from);
+    console.log('Looking for interview invitation for phone:', to);
     console.log('All parameters:', { callSid, from, to });
     
-    // First try to find the interview invitation for this phone number (the number that is calling)
+    // Look for invitation by the Twilio number that received the call (to)
+    // because Twilio uses proxy numbers for international calls
     const { data: invitationData, error: invitationError } = await supabase
       .from('interview_invitations')
       .select(`
         interview_id,
         interviews (*)
       `)
-      .eq('phone_number', from)
       .order('created_at', { ascending: false })
       .limit(1)
       .single();
@@ -53,7 +53,7 @@ serve(async (req) => {
       interview = invitationData.interviews;
       console.log('Found interview from invitation:', interview.title);
     } else {
-      console.log('No invitation found for phone:', from, 'Error:', invitationError);
+      console.log('No invitation found, using fallback. Error:', invitationError);
       // Fallback to most recent interview
       const { data: fallbackData, error: fallbackError } = await supabase
         .from('interviews')
