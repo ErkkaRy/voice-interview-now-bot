@@ -41,8 +41,11 @@ serve(async (req) => {
       .single();
 
     if (interviewError || !interview) {
+      console.error('Interview error:', interviewError);
       throw new Error('Interview not found');
     }
+
+    console.log('Found interview:', interview.title, 'with questions:', interview.questions);
 
     // Get user's speech input
     const userInput = speechResult || '';
