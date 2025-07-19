@@ -68,6 +68,7 @@ const InterviewLauncher = ({ interviews, isLoading, onEditInterview }: Interview
     if (selectedInterview) {
       const interview = interviews.find(i => i.id === selectedInterview);
       if (interview) {
+        console.log('Using selected interview for voice test:', interview.title, interview.questions);
         return {
           title: interview.title,
           questions: interview.questions
@@ -75,6 +76,7 @@ const InterviewLauncher = ({ interviews, isLoading, onEditInterview }: Interview
       }
     }
     
+    console.log('No interview selected, using default questions for voice test');
     // Fallback to default test questions
     return {
       title: "Voice Chat Testi",
@@ -164,10 +166,9 @@ const InterviewLauncher = ({ interviews, isLoading, onEditInterview }: Interview
           onClick={() => setShowVoiceTest(true)}
           className="w-full bg-blue-600 hover:bg-blue-700 mb-4"
           variant="outline"
-          disabled={!selectedInterview}
         >
           <Mic className="h-4 w-4 mr-2" />
-          Testaa voice chat
+          Testaa voice chat {selectedInterview ? `(${interviews.find(i => i.id === selectedInterview)?.title || ''})` : '(oletuskysymykset)'}
         </Button>
 
         {/* Launch Button */}

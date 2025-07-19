@@ -124,7 +124,7 @@ const createWavFromPCM = (pcmData: Uint8Array): Uint8Array => {
 class AudioQueue {
   private queue: Uint8Array[] = [];
   private isPlaying = false;
-  private audioContext: AudioContext;
+  public audioContext: AudioContext;
 
   constructor(audioContext: AudioContext) {
     this.audioContext = audioContext;
@@ -173,10 +173,16 @@ class AudioQueue {
 let audioQueueInstance: AudioQueue | null = null;
 
 export const playAudioData = async (audioContext: AudioContext, audioData: Uint8Array) => {
-  if (!audioQueueInstance) {
+  if (!audioQueueInstance || audioQueueInstance.audioContext !== audioContext) {
+    console.log('Creating new AudioQueue instance');
     audioQueueInstance = new AudioQueue(audioContext);
   }
   await audioQueueInstance.addToQueue(audioData);
+};
+
+export const resetAudioQueue = () => {
+  console.log('Resetting audio queue');
+  audioQueueInstance = null;
 };
 
 export class RealtimeChat {
@@ -357,8 +363,10 @@ Haastattelukysymykset joita voit käyttää pohjana, mutta sovella niitä tilant
   }
 
   disconnect() {
+    console.log('Disconnecting RealtimeChat');
     this.recorder?.stop();
     this.ws?.close();
     this.audioContext?.close();
+    resetAudioQueue(); // Reset audio queue to prevent issues on reconnect
   }
 }

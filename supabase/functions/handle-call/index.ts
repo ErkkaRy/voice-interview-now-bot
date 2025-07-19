@@ -28,16 +28,21 @@ serve(async (req) => {
 
     console.log('Received call from:', from, 'to:', to);
 
-    // For now, we'll start the interview directly since we removed the calls table
-    // In a production system, you might want to verify the caller somehow
+    // Try to find the most recent interview that was sent to this phone number
+    // First check if we have a call record with the interview ID
+    let interview = null;
+    let interviewError = null;
     
-    // Get the most recent interview for testing
-    const { data: interview, error: interviewError } = await supabase
+    // For now, get the most recent interview as fallback
+    const { data: interviewData, error: err } = await supabase
       .from('interviews')
       .select('*')
       .order('created_at', { ascending: false })
       .limit(1)
       .single();
+      
+    interview = interviewData;
+    interviewError = err;
 
     if (interviewError || !interview) {
       console.error('No interview found:', interviewError);
