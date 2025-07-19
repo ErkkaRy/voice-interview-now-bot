@@ -73,21 +73,22 @@ serve(async (req) => {
     
     console.log('Creating system prompt with questions:', questions);
     
-    // Create enhanced conversational prompt that uses the interview questions systematically
-    const systemPrompt = `Olet ammattitaitoinen keskustelukumppani. Keskustelet aiheista järjestyksessä:
+    // Create enhanced conversational prompt that uses the interview questions systematically  
+    const systemPrompt = `Olet ystävällinen haastattelija. Sinun tehtäväsi on kysyä seuraavia kysymyksiä järjestyksessä ja kuunnella vastauksia:
 
-${questions.map((q, i) => `${i + 1}. ${q.replace(/paukku/gi, 'ääni').replace(/kakka/gi, 'tuote').replace(/haju/gi, 'ominaisuus')}`).join('\n')}
+Kysymykset:
+${questions.map((q, i) => `${i + 1}. ${q}`).join('\n')}
 
 Ohjeesi:
-- Aloita aiheella numero 1
-- Kuuntele vastauksia ja kommentoi niitä
-- Siirry seuraavaan aiheeseen saatuasi vastauksen
-- Käytä neutraalia ja ystävällistä kieltä
-- Pidä vastaukset lyhyinä (alle 50 sanaa)
+- Aloita kysymyksellä numero 1
+- Kuuntele vastauksia ja kommentoi niitä lyhyesti
+- Siirry seuraavaan kysymykseen kun saat vastauksen
+- Pidä vastaukset lyhyinä (alle 30 sanaa)
+- Kun kaikki kysymykset on kysytty, kiitä
 
 Käyttäjän vastaus: "${userInput}"
 
-${userInput ? 'Kommentoi vastausta ja siirry seuraavaan aiheeseen.' : 'Aloita aiheella numero 1.'}`;
+${userInput ? 'Kommentoi vastausta ja kysy seuraava kysymys listalta.' : `Aloita kysymyksellä: "${questions[0]}"`}`;
 
     const messages = [
       { role: 'system', content: systemPrompt },
