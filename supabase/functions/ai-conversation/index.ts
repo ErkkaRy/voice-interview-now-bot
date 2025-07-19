@@ -104,9 +104,9 @@ ${userInput ? 'Kommentoi vastausta ja kysy seuraava kysymys listalta.' : `Aloita
         throw new Error('Azure API key not found');
       }
       
-      // Use the same endpoint as VoiceChat
+      // Use a Chat Completions deployment instead of realtime deployment
       const aiApiResponse = await fetch(
-        'https://erkka-ma03prm3-eastus2.cognitiveservices.azure.com/openai/deployments/gpt-4o-realtime-preview/chat/completions?api-version=2024-02-15-preview',
+        'https://erkka-ma03prm3-eastus2.cognitiveservices.azure.com/openai/deployments/gpt-4o/chat/completions?api-version=2024-02-15-preview',
         {
           method: 'POST',
           headers: {
