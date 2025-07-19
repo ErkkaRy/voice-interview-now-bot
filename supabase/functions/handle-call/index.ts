@@ -97,10 +97,12 @@ serve(async (req) => {
     
     const firstQuestion = interview.questions?.[0] || 'Kerro minulle jotain.';
     
-    // Ultra simple TwiML without variables to test
+    // Test with Gather but fixed URL
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Say voice="alice" language="fi-FI">Hei! Aloitetaan haastattelu. Kerro itsestasi.</Say>
+  <Gather input="speech" action="https://jhjbvmyfzmjrfoodphuj.supabase.co/functions/v1/ai-conversation" method="POST" speechTimeout="3" language="fi-FI" />
+  <Say voice="alice" language="fi-FI">En kuullut vastausta. Hyvaa paivaa!</Say>
   <Hangup/>
 </Response>`;
 
