@@ -93,12 +93,18 @@ serve(async (req) => {
       totalQuestions: questions.length, 
       userMessagesCount: userMessages.length, 
       currentQuestionIndex,
-      isFirstMessage 
+      isFirstMessage,
+      firstQuestion: questions[0],
+      allQuestions: questions
     });
     
     if (isFirstMessage || currentQuestionIndex === 0) {
-      // First question
-      aiResponse = `Hei! Aloitetaan ${interview.title} haastattelu. ${questions[0] || 'Kerro itsestäsi.'}`;
+      // First question - make sure to use the actual first question
+      if (questions.length > 0) {
+        aiResponse = `Hei! Aloitetaan ${interview.title} haastattelu. ${questions[0]}`;
+      } else {
+        aiResponse = `Hei! Aloitetaan ${interview.title} haastattelu. Kerro itsestäsi.`;
+      }
     } else if (currentQuestionIndex < questions.length) {
       // Ask next question
       aiResponse = `Kiitos vastauksesta. ${questions[currentQuestionIndex]}`;
