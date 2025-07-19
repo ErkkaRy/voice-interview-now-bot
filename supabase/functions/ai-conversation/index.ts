@@ -13,8 +13,9 @@ serve(async (req) => {
   }
 
   try {
+    console.log('=== AI-CONVERSATION FUNCTION START ===');
     const url = new URL(req.url);
-    const interviewId = url.searchParams.get('interviewId');
+    let interviewId = url.searchParams.get('interviewId');
     const from = url.searchParams.get('from');
     const formData = await req.formData();
     
@@ -24,15 +25,30 @@ serve(async (req) => {
     console.log('Speech received:', { interviewId, from, speechResult, callSid });
     console.log('CallSid type and value:', typeof callSid, callSid);
 
-    if (!interviewId) {
-      throw new Error('Interview ID is required');
-    }
-
     // Initialize Supabase client
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
+
+    // If no interviewId in URL, get the latest interview as fallback
+    if (!interviewId) {
+      console.log('No interviewId in URL, getting latest interview...');
+      const { data: latestInterview, error: latestError } = await supabase
+        .from('interviews')
+        .select('id')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+      
+      if (latestInterview && !latestError) {
+        interviewId = latestInterview.id;
+        console.log('Using latest interview ID:', interviewId);
+      } else {
+        console.error('No interviews found:', latestError);
+        throw new Error('No interview available');
+      }
+    }
 
     // Get interview details
     const { data: interview, error: interviewError } = await supabase
