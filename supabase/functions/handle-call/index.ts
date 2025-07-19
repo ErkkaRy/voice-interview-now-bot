@@ -51,7 +51,7 @@ serve(async (req) => {
 
     if (invitationData && invitationData.interviews) {
       interview = invitationData.interviews;
-      console.log('Found interview from invitation:', interview.title);
+      console.log('Found interview from invitation:', interview.title, 'ID:', interview.id);
     } else {
       console.log('No invitation found, using fallback. Error:', invitationError);
       // Fallback to most recent interview
