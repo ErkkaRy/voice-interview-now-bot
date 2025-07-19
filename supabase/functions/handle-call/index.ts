@@ -90,9 +90,11 @@ serve(async (req) => {
       gatherUrl: gatherUrl
     });
     
+    const firstQuestion = interview.questions?.[0] || 'Kerro minulle jotain.';
+    
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say voice="alice" language="fi-FI">Hei! Aloitetaan haastattelu ${interview.title}. Vastaa kysymyksiin luonnollisesti.</Say>
+  <Say voice="alice" language="fi-FI">Hei! Aloitetaan haastattelu ${interview.title}. ${firstQuestion}</Say>
   <Gather 
     input="speech"
     timeout="10"
@@ -102,9 +104,7 @@ serve(async (req) => {
     language="fi-FI"
     action="${gatherUrl}?interviewId=${interview.id}&amp;from=${encodeURIComponent(from)}"
     method="POST"
-  >
-    <Say voice="alice" language="fi-FI">Kuuntelen sinua nyt...</Say>
-  </Gather>
+  />
   <Say voice="alice" language="fi-FI">En kuullut vastausta. Lopetan puhelun.</Say>
   <Hangup/>
 </Response>`;

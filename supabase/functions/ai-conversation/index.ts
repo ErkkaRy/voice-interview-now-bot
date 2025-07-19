@@ -93,7 +93,7 @@ serve(async (req) => {
     
     // Determine what to say based on conversation state
     if (!userInput) {
-      // First call - start with first question
+      // First call - should not happen since handle-call asks first question
       aiResponse = `Hei! Aloitetaan haastattelu "${interview.title}". ${questions[0]}`;
     } else if (currentQuestionIndex < questions.length - 1) {
       // Move to next question
