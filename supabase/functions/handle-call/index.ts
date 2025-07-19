@@ -28,21 +28,41 @@ serve(async (req) => {
 
     console.log('Received call from:', from, 'to:', to);
 
-    // Try to find the most recent interview that was sent to this phone number
-    // First check if we have a call record with the interview ID
+    // Find the interview that was sent to this phone number
     let interview = null;
     let interviewError = null;
     
-    // For now, get the most recent interview as fallback
-    const { data: interviewData, error: err } = await supabase
-      .from('interviews')
-      .select('*')
+    console.log('Looking for interview invitation for phone:', from);
+    
+    // First try to find the interview invitation for this phone number
+    const { data: invitationData, error: invitationError } = await supabase
+      .from('interview_invitations')
+      .select(`
+        interview_id,
+        interviews (*)
+      `)
+      .eq('phone_number', from)
       .order('created_at', { ascending: false })
       .limit(1)
       .single();
+
+    if (invitationData && invitationData.interviews) {
+      interview = invitationData.interviews;
+      console.log('Found interview from invitation:', interview.title);
+    } else {
+      console.log('No invitation found for phone:', from, 'Error:', invitationError);
+      // Fallback to most recent interview
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from('interviews')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
       
-    interview = interviewData;
-    interviewError = err;
+      interview = fallbackData;
+      interviewError = fallbackError;
+      console.log('Using fallback interview:', interview?.title);
+    }
 
     if (interviewError || !interview) {
       console.error('No interview found:', interviewError);

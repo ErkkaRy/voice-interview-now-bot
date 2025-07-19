@@ -38,6 +38,20 @@ serve(async (req) => {
 
     console.log('Found interview:', interview);
 
+    // Save interview invitation to database
+    const { error: invitationError } = await supabase
+      .from('interview_invitations')
+      .insert({
+        phone_number: phoneNumber,
+        interview_id: interviewId
+      });
+
+    if (invitationError) {
+      console.error('Error saving invitation:', invitationError);
+    } else {
+      console.log('Saved invitation:', { phone_number: phoneNumber, interview_id: interviewId });
+    }
+
     // Send SMS using Twilio
     const twilioAccountSid = Deno.env.get('TWILIO_ACCOUNT_SID');
     const twilioAuthToken = Deno.env.get('TWILIO_AUTH_TOKEN');

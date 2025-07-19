@@ -14,6 +14,35 @@ export type Database = {
   }
   public: {
     Tables: {
+      interview_invitations: {
+        Row: {
+          created_at: string
+          id: string
+          interview_id: string
+          phone_number: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          interview_id: string
+          phone_number: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          interview_id?: string
+          phone_number?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "interview_invitations_interview_id_fkey"
+            columns: ["interview_id"]
+            isOneToOne: false
+            referencedRelation: "interviews"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       interviews: {
         Row: {
           created_at: string
