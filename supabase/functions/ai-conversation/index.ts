@@ -53,11 +53,19 @@ serve(async (req) => {
     console.log('User input:', userInput);
 
     // Get or create conversation state from database
-    let { data: conversationData } = await supabase
+    console.log('Looking for conversation with call_sid:', callSid);
+    let { data: conversationData, error: conversationError } = await supabase
       .from('conversations')
       .select('*')
       .eq('call_sid', callSid)
-      .single();
+      .maybeSingle();
+
+    console.log('Conversation query result:', { conversationData, conversationError });
+
+    if (conversationError) {
+      console.error('Error fetching conversation:', conversationError);
+      throw new Error('Database error: ' + conversationError.message);
+    }
 
     let currentQuestionIndex = 0;
     let conversation = [];
@@ -65,9 +73,11 @@ serve(async (req) => {
     if (conversationData) {
       currentQuestionIndex = conversationData.current_question_index || 0;
       conversation = conversationData.messages || [];
+      console.log('Found existing conversation, current question index:', currentQuestionIndex);
     } else {
+      console.log('Creating new conversation record');
       // Create new conversation record
-      await supabase
+      const { error: insertError } = await supabase
         .from('conversations')
         .insert({
           call_sid: callSid,
@@ -75,6 +85,11 @@ serve(async (req) => {
           current_question_index: 0,
           messages: []
         });
+      
+      if (insertError) {
+        console.error('Error creating conversation:', insertError);
+        throw new Error('Failed to create conversation: ' + insertError.message);
+      }
     }
 
     // Add user's response to conversation
@@ -113,13 +128,18 @@ serve(async (req) => {
       timestamp: new Date().toISOString()
     });
 
-    await supabase
+    const { error: updateError } = await supabase
       .from('conversations')
       .update({
         current_question_index: currentQuestionIndex,
         messages: conversation
       })
       .eq('call_sid', callSid);
+
+    if (updateError) {
+      console.error('Error updating conversation:', updateError);
+      // Continue anyway, don't break the call
+    }
 
     console.log('Generated AI response:', aiResponse);
 
