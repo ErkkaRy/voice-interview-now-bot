@@ -33,6 +33,7 @@ serve(async (req) => {
     let interviewError = null;
     
     console.log('Looking for interview invitation for phone:', from);
+    console.log('All parameters:', { callSid, from, to });
     
     // First try to find the interview invitation for this phone number (the number that is calling)
     const { data: invitationData, error: invitationError } = await supabase
@@ -45,6 +46,8 @@ serve(async (req) => {
       .order('created_at', { ascending: false })
       .limit(1)
       .single();
+
+    console.log('Invitation query result:', { invitationData, invitationError });
 
     if (invitationData && invitationData.interviews) {
       interview = invitationData.interviews;
