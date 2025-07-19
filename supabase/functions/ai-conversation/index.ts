@@ -85,17 +85,25 @@ serve(async (req) => {
     const questions = interview.questions || [];
     let aiResponse = '';
     
-    if (isFirstMessage) {
+    // Count only user messages to track progress
+    const userMessages = messages.filter(msg => msg.role === 'user');
+    const currentQuestionIndex = userMessages.length;
+    
+    console.log('Question tracking:', { 
+      totalQuestions: questions.length, 
+      userMessagesCount: userMessages.length, 
+      currentQuestionIndex,
+      isFirstMessage 
+    });
+    
+    if (isFirstMessage || currentQuestionIndex === 0) {
+      // First question
       aiResponse = `Hei! Aloitetaan ${interview.title} haastattelu. ${questions[0] || 'Kerro itsestäsi.'}`;
-    } else if (messages.length < questions.length * 2) {
-      // Calculate which question we're on
-      const questionIndex = Math.floor(messages.length / 2);
-      if (questionIndex < questions.length - 1) {
-        aiResponse = `Kiitos vastauksesta. ${questions[questionIndex + 1]}`;
-      } else {
-        aiResponse = 'Kiitos kaikista vastauksista! Haastattelu on valmis.';
-      }
+    } else if (currentQuestionIndex < questions.length) {
+      // Ask next question
+      aiResponse = `Kiitos vastauksesta. ${questions[currentQuestionIndex]}`;
     } else {
+      // All questions answered
       aiResponse = 'Kiitos kaikista vastauksista! Haastattelu on valmis.';
     }
 
