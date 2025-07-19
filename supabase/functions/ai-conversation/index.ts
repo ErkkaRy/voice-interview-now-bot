@@ -96,32 +96,31 @@ ${userInput ? 'Kommentoi vastausta ja kysy seuraava kysymys listalta.' : `Aloita
     ];
 
     try {
-      console.log('Attempting Azure OpenAI call with endpoint:', Deno.env.get('AZURE_OPENAI_ENDPOINT'));
-      console.log('Deployment name:', Deno.env.get('AZURE_OPENAI_DEPLOYMENT_NAME'));
-      console.log('API key exists:', !!Deno.env.get('AZURE_OPENAI_API_KEY'));
+      console.log('Making OpenAI API call...');
       
-      const aiApiResponse = await fetch(
-        `${Deno.env.get('AZURE_OPENAI_ENDPOINT')}/openai/deployments/${Deno.env.get('AZURE_OPENAI_DEPLOYMENT_NAME')}/chat/completions?api-version=2024-02-15-preview`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'api-key': Deno.env.get('AZURE_OPENAI_API_KEY')!,
-          },
-          body: JSON.stringify({
-            messages,
-            max_tokens: 100,
-            temperature: 0.8,
-          }),
-        }
-      );
+      const aiApiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${Deno.env.get('OPENAI_API_KEY')}`,
+        },
+        body: JSON.stringify({
+          model: 'gpt-4.1-2025-04-14',
+          messages,
+          max_tokens: 100,
+          temperature: 0.8,
+        }),
+      });
       
-      console.log('Azure OpenAI response status:', aiApiResponse.status);
+      console.log('OpenAI response status:', aiApiResponse.status);
 
       if (aiApiResponse.ok) {
         const aiData = await aiApiResponse.json();
         aiResponse = aiData.choices[0]?.message?.content || 'Kerro lisää.';
+        console.log('AI response received:', aiResponse);
       } else {
+        const errorText = await aiApiResponse.text();
+        console.error('OpenAI API error:', errorText);
         aiResponse = 'Kiintoisa. Kerro lisää.';
       }
     } catch (error) {
