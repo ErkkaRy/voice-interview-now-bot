@@ -1,6 +1,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import "https://deno.land/x/xhr@0.1.0/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -48,13 +49,15 @@ serve(async (req) => {
       .eq('call_sid', callSid)
       .maybeSingle();
 
-    let currentQuestionIndex = 0;
+    let messages = [];
+    let isFirstMessage = false;
     
     if (conversationData) {
-      currentQuestionIndex = conversationData.current_question_index || 0;
-      console.log('Existing conversation, question index:', currentQuestionIndex);
+      messages = conversationData.messages || [];
+      console.log('Existing conversation, messages count:', messages.length);
     } else {
       console.log('Creating new conversation');
+      isFirstMessage = true;
       const { error: insertError } = await supabase
         .from('conversations')
         .insert({
@@ -69,44 +72,114 @@ serve(async (req) => {
       }
     }
 
-    const questions = interview.questions || [];
-    let aiResponse = '';
-    
-    // Determine response based on current state
-    if (currentQuestionIndex < questions.length) {
-      // Ask current question
-      aiResponse = `Kiitos vastauksesta. ${questions[currentQuestionIndex]}`;
-      
-      // Move to next question for next time
-      const nextIndex = currentQuestionIndex + 1;
-      await supabase
-        .from('conversations')
-        .update({ current_question_index: nextIndex })
-        .eq('call_sid', callSid);
-        
-    } else {
-      // All questions done
-      aiResponse = 'Kiitos kaikista vastauksista! Haastattelu on valmis.';
+    // Add user's response to conversation history
+    if (!isFirstMessage && speechResult) {
+      messages.push({
+        role: 'user',
+        content: speechResult,
+        timestamp: new Date().toISOString()
+      });
     }
+
+    // Prepare system prompt for ChatGPT
+    const systemPrompt = `Olet ammattimainen haastattelija. Sinun tehtäväsi on tehdä haastattelu aiheesta "${interview.title}".
+
+Haastattelun kysymykset ovat:
+${interview.questions.map((q, i) => `${i + 1}. ${q}`).join('\n')}
+
+OHJEITA:
+- Puhu suomeksi
+- Ole ystävällinen ja ammattimainen
+- Kysy kysymyksiä luonnollisessa järjestyksessä, mutta voit kysyä tarkentavia lisäkysymyksiä
+- Reagoi vastauksiin luonnollisesti ("kiitos", "mielenkiintoista" jne.)
+- Kun kaikki pääkysymykset on käsitelty, lopeta haastattelu kiittämällä
+- Pidä vastaukset lyhyinä (max 2-3 lausetta kerrallaan)
+- Jos tämä on ensimmäinen viesti, tervehdi ja aloita haastattelu
+
+${isFirstMessage ? 'Tämä on ensimmäinen viesti - tervehdi ja aloita haastattelu.' : 'Jatka haastattelua luonnollisesti edellisten viestien perusteella.'}`;
+
+    // Prepare conversation history for ChatGPT
+    const chatMessages = [
+      { role: 'system', content: systemPrompt }
+    ];
+
+    // Add conversation history
+    messages.forEach(msg => {
+      chatMessages.push({
+        role: msg.role,
+        content: msg.content
+      });
+    });
+
+    console.log('Sending to Azure OpenAI:', { messagesCount: chatMessages.length });
+
+    // Call Azure OpenAI
+    const azureEndpoint = Deno.env.get('AZURE_OPENAI_ENDPOINT');
+    const azureApiKey = Deno.env.get('AZURE_OPENAI_API_KEY');
+    
+    if (!azureEndpoint || !azureApiKey) {
+      throw new Error('Azure OpenAI credentials not configured');
+    }
+
+    const response = await fetch(`${azureEndpoint}/openai/deployments/gpt-4o/chat/completions?api-version=2024-02-15-preview`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'api-key': azureApiKey,
+      },
+      body: JSON.stringify({
+        messages: chatMessages,
+        max_tokens: 150,
+        temperature: 0.7,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Azure OpenAI error:', errorText);
+      throw new Error(`Azure OpenAI API error: ${response.status}`);
+    }
+
+    const aiResult = await response.json();
+    const aiResponse = aiResult.choices[0].message.content.trim();
 
     console.log('AI response:', aiResponse);
 
-    // Create TwiML with either next question or end
+    // Add AI response to conversation history
+    messages.push({
+      role: 'assistant',
+      content: aiResponse,
+      timestamp: new Date().toISOString()
+    });
+
+    // Update conversation in database
+    await supabase
+      .from('conversations')
+      .update({ 
+        messages: messages,
+        updated_at: new Date().toISOString()
+      })
+      .eq('call_sid', callSid);
+
+    // Check if conversation should end
+    const shouldEnd = aiResponse.toLowerCase().includes('lopetan') || 
+                     aiResponse.toLowerCase().includes('kiitos kaikista') ||
+                     aiResponse.toLowerCase().includes('haastattelu on valmis');
+
+    // Create TwiML response
     let twiml = '';
-    if (currentQuestionIndex < questions.length) {
-      // Continue with next question
+    if (shouldEnd) {
+      twiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="alice" language="fi-FI">${aiResponse}</Say>
+  <Hangup/>
+</Response>`;
+    } else {
       twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Say voice="alice" language="fi-FI">${aiResponse}</Say>
   <Gather input="speech" action="https://jhjbvmyfzmjrfoodphuj.supabase.co/functions/v1/ai-conversation" method="POST" speechTimeout="3" language="fi-FI" />
   <Say voice="alice" language="fi-FI">En kuullut vastausta. Lopetan puhelun.</Say>
-  <Hangup/>
-</Response>`;
-    } else {
-      // End conversation
-      twiml = `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Say voice="alice" language="fi-FI">${aiResponse}</Say>
   <Hangup/>
 </Response>`;
     }
