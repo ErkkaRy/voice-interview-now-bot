@@ -71,24 +71,25 @@ serve(async (req) => {
     // Track conversation state (in real app, store in database)
     let currentQuestionIndex = 0;
     
+    console.log('Creating system prompt with questions:', questions);
+    
     // Create enhanced conversational prompt that uses the interview questions systematically
-    const systemPrompt = `Olet avulias ja keskusteleva suomenkielinen haastattelija. Toimi seuraavasti:
+    const systemPrompt = `Olet suomenkielinen haastattelija haastattelulle "${interview.title}". 
 
-1. Jos tämä on ensimmäinen vastaus tai käyttäjä ei ole vielä vastannut, aloita ENSIMMÄISELLÄ kysymyksellä: "${questions[0] || 'Kerro kokemuksestasi'}"
-2. Kuuntele vastauksia tarkasti ja kysy tarkentavia jatkokysymyksiä
-3. Jos joku vastaa negatiivisesti, kysy aina: "Mitä puuttui?" tai "Voisitko kertoa tarkemmin?"
-4. Kun saat riittävän vastauksen, siirry SEURAAVAAN haastattelukysymykseen järjestyksessä
-5. Ole kiinnostunut ja empaattinen
-6. Pidä keskustelu sujuvana ja luonnollisena
-7. Kysy yksi kysymys kerrallaan
-8. Pidä vastaukset alle 50 sanaa
+TÄRKEÄÄ: Sinun TÄYTYY käyttää näitä TARKKOJA haastattelukysymyksiä järjestyksessä:
 
-HAASTATTELUKYSYMYKSET JÄRJESTYKSESSÄ:
 ${questions.map((q, i) => `${i + 1}. ${q}`).join('\n')}
+
+Toimi näin:
+- Jos tämä on ensimmäinen kerta, aloita suoraan kysymyksellä numero 1: "${questions[0]}"
+- Kuuntele vastauksia ja kysy tarkentavia kysymyksiä
+- Siirry seuraavaan numeroiduun kysymykseen kun saat riittävän vastauksen
+- Älä keksi omia kysymyksiä, käytä VAIN yllä olevia kysymyksiä
+- Pidä vastaukset alle 50 sanaa
 
 Käyttäjän viimeisin vastaus: "${userInput}"
 
-Jos käyttäjä ei ole vielä vastannut mihinkään, aloita kysymyksellä numero 1.`;
+${userInput ? 'Kommentoi vastausta lyhyesti ja siirry seuraavaan kysymykseen listalta.' : 'Aloita heti kysymyksellä numero 1.'}`;
 
     const messages = [
       { role: 'system', content: systemPrompt },
