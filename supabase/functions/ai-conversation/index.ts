@@ -144,6 +144,8 @@ ${userInput ? 'Kommentoi vastausta ja kysy seuraava kysymys listalta.' : `Aloita
       timestamp: new Date().toISOString()
     });
 
+    console.log('Generated AI response:', aiResponse);
+
     // Create TwiML response with continued conversation
     let twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
@@ -163,6 +165,9 @@ ${userInput ? 'Kommentoi vastausta ja kysy seuraava kysymys listalta.' : `Aloita
   <Say voice="alice" language="fi-FI">Kiitos haastattelusta! Hyvää päivänjatkoa.</Say>
   <Hangup/>
 </Response>`;
+
+    console.log('Generated TwiML:', twiml);
+    console.log('Returning TwiML response with Content-Type: text/xml');
 
     return new Response(twiml, {
       headers: { ...corsHeaders, 'Content-Type': 'text/xml' }
