@@ -18,10 +18,11 @@ serve(async (req) => {
     const from = url.searchParams.get('from');
     const formData = await req.formData();
     
-    const speechResult = formData.get('SpeechResult');
-    const callSid = formData.get('CallSid');
+    const speechResult = formData.get('SpeechResult')?.toString() || '';
+    const callSid = formData.get('CallSid')?.toString() || '';
     
     console.log('Speech received:', { interviewId, from, speechResult, callSid });
+    console.log('CallSid type and value:', typeof callSid, callSid);
 
     if (!interviewId) {
       throw new Error('Interview ID is required');
@@ -119,55 +120,6 @@ serve(async (req) => {
         messages: conversation
       })
       .eq('call_sid', callSid);
-
-    try {
-      console.log('Making Azure OpenAI call...');
-      console.log('Azure API key exists:', !!Deno.env.get('AZURE_API_KEY'));
-      
-      const azureApiKey = Deno.env.get('AZURE_API_KEY');
-      if (!azureApiKey) {
-        throw new Error('Azure API key not found');
-      }
-      
-      // Use a Chat Completions deployment instead of realtime deployment
-      const aiApiResponse = await fetch(
-        'https://erkka-ma03prm3-eastus2.cognitiveservices.azure.com/openai/deployments/gpt-4o/chat/completions?api-version=2024-02-15-preview',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'api-key': azureApiKey,
-          },
-          body: JSON.stringify({
-            messages,
-            max_tokens: 100,
-            temperature: 0.8,
-          }),
-        }
-      );
-      
-      console.log('Azure OpenAI response status:', aiApiResponse.status);
-
-      if (aiApiResponse.ok) {
-        const aiData = await aiApiResponse.json();
-        aiResponse = aiData.choices[0]?.message?.content || 'Kerro lisää.';
-        console.log('AI response received:', aiResponse);
-      } else {
-        const errorText = await aiApiResponse.text();
-        console.error('Azure OpenAI API error:', aiApiResponse.status, errorText);
-        aiResponse = 'Kiintoisa. Kerro lisää.';
-      }
-    } catch (error) {
-      console.error('AI API error:', error);
-      aiResponse = 'Kiintoisa. Kerro lisää.';
-    }
-
-    // Add AI response to conversation
-    conversation.push({
-      role: 'assistant',
-      content: aiResponse,
-      timestamp: new Date().toISOString()
-    });
 
     console.log('Generated AI response:', aiResponse);
 
