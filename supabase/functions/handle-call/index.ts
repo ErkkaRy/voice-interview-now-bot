@@ -97,21 +97,14 @@ serve(async (req) => {
     
     const firstQuestion = interview.questions?.[0] || 'Kerro minulle jotain.';
     
-    // Clean up text for TwiML (remove problematic characters)
-    const cleanTitle = interview.title.replace(/[<>&"']/g, '');
-    const cleanQuestion = firstQuestion.replace(/[<>&"']/g, '');
-    
+    // Ultra simple TwiML without variables to test
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say voice="alice" language="fi-FI">Hei! Aloitetaan ${cleanTitle}. ${cleanQuestion}</Say>
-  <Gather input="speech" action="${gatherUrl}" method="POST" speechTimeout="3" language="fi-FI">
-    <Say voice="alice" language="fi-FI">Kerro nyt vastauksesi.</Say>
-  </Gather>
-  <Say voice="alice" language="fi-FI">En kuullut vastausta. Hyvaa paivanjatkoa!</Say>
+  <Say voice="alice" language="fi-FI">Hei! Aloitetaan haastattelu. Kerro itsestasi.</Say>
   <Hangup/>
 </Response>`;
 
-    console.log('Generated TwiML:', twiml);
+    console.log('Generated simple TwiML:', twiml);
     console.log('TwiML length:', twiml.length);
     console.log('Returning TwiML with Content-Type: text/xml');
 
