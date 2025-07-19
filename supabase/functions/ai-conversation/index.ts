@@ -65,21 +65,27 @@ serve(async (req) => {
     
     let aiResponse = '';
     
-    // Create enhanced conversational prompt
+    // Track conversation state (in real app, store in database)
+    let currentQuestionIndex = 0;
+    
+    // Create enhanced conversational prompt that uses the interview questions systematically
     const systemPrompt = `Olet avulias ja keskusteleva suomenkielinen haastattelija. Toimi seuraavasti:
 
-1. Jos tämä on ensimmäinen vastaus, tervehdi lämpimästi ja aloita haastattelukysymyksillä
+1. Jos tämä on ensimmäinen vastaus tai käyttäjä ei ole vielä vastannut, aloita ENSIMMÄISELLÄ kysymyksellä: "${questions[0] || 'Kerro kokemuksestasi'}"
 2. Kuuntele vastauksia tarkasti ja kysy tarkentavia jatkokysymyksiä
-3. Jos joku vastaa negatiivisesti (esim. "ruoka ei ollut hyvää" tai "menu ei ollut riittävän laaja"), kysy aina: "Mitä puuttui?" tai "Voisitko kertoa tarkemmin?"
-4. Ole kiinnostunut ja empaattinen
-5. Pidä keskustelu sujuvana ja luonnollisena
-6. Kysy yksi kysymys kerrallaan
-7. Voit kommentoida vastauksia lyhyesti ennen seuraavaa kysymystä
+3. Jos joku vastaa negatiivisesti, kysy aina: "Mitä puuttui?" tai "Voisitko kertoa tarkemmin?"
+4. Kun saat riittävän vastauksen, siirry SEURAAVAAN haastattelukysymykseen järjestyksessä
+5. Ole kiinnostunut ja empaattinen
+6. Pidä keskustelu sujuvana ja luonnollisena
+7. Kysy yksi kysymys kerrallaan
 8. Pidä vastaukset alle 50 sanaa
 
-Haastattelukysymykset: ${questions.join(', ')}
+HAASTATTELUKYSYMYKSET JÄRJESTYKSESSÄ:
+${questions.map((q, i) => `${i + 1}. ${q}`).join('\n')}
 
-Käyttäjän viimeisin vastaus: "${userInput}"`;
+Käyttäjän viimeisin vastaus: "${userInput}"
+
+Jos käyttäjä ei ole vielä vastannut mihinkään, aloita kysymyksellä numero 1.`;
 
     const messages = [
       { role: 'system', content: systemPrompt },

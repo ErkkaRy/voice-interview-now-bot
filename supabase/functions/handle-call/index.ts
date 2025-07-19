@@ -56,6 +56,12 @@ serve(async (req) => {
     // Create TwiML response with voice chat support
     const gatherUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/ai-conversation`;
     
+    console.log('Creating TwiML response with:', {
+      interviewId: interview.id,
+      from: from,
+      gatherUrl: gatherUrl
+    });
+    
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Say voice="alice" language="fi-FI">Hei! Aloitetaan haastattelu ${interview.title}. Vastaa kysymyksiin luonnollisesti.</Say>
@@ -66,7 +72,7 @@ serve(async (req) => {
     speechModel="phone_call"
     enhanced="true"
     language="fi-FI"
-    action="${gatherUrl}?interviewId=${interview.id}&from=${from}"
+    action="${gatherUrl}?interviewId=${interview.id}&amp;from=${encodeURIComponent(from)}"
     method="POST"
   >
     <Say voice="alice" language="fi-FI">Kuuntelen sinua nyt...</Say>
