@@ -8,8 +8,9 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  console.log('=== EDGE FUNCTION STARTED ===');
+  console.log('=== REALTIME-CHAT EDGE FUNCTION STARTED ===');
   console.log('Request method:', req.method);
+  console.log('Request URL:', req.url);
   console.log('Request headers:', Object.fromEntries(req.headers.entries()));
   
   if (req.method === 'OPTIONS') {
@@ -17,12 +18,14 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Extract interview ID from URL parameters
-  const url = new URL(req.url);
-  const interviewId = url.searchParams.get('interviewId');
-  console.log('Interview ID from URL:', interviewId);
+  try {
+    // Extract interview ID from URL parameters
+    const url = new URL(req.url);
+    const interviewId = url.searchParams.get('interviewId');
+    const from = url.searchParams.get('from');
+    console.log('URL parameters:', { interviewId, from });
 
-  const AZURE_API_KEY = Deno.env.get('AZURE_API_KEY');
+    const AZURE_API_KEY = Deno.env.get('AZURE_API_KEY');
   console.log('Azure API key exists:', !!AZURE_API_KEY);
   
   if (!AZURE_API_KEY) {
@@ -205,6 +208,14 @@ SÄÄNNÖT:
     console.error('=== WEBSOCKET UPGRADE FAILED ===');
     console.error('Upgrade error:', error);
     return new Response(JSON.stringify({ error: 'WebSocket upgrade failed', details: String(error) }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+  } catch (outerError) {
+    console.error('=== OUTER CATCH ERROR ===');
+    console.error('Outer error details:', outerError);
+    return new Response(JSON.stringify({ error: 'Function failed', details: String(outerError) }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

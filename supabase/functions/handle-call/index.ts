@@ -81,8 +81,8 @@ serve(async (req) => {
 
     console.log('Starting interview:', interview.title);
 
-    // Create TwiML response with voice chat support
-    const gatherUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/ai-conversation`;
+    // Use traditional Gather approach instead of Stream for better compatibility
+    const gatherUrl = `https://jhjbvmyfzmjrfoodphuj.supabase.co/functions/v1/ai-conversation`;
     
     console.log('Creating TwiML response with:', {
       interviewId: interview.id,
@@ -92,14 +92,14 @@ serve(async (req) => {
     
     const firstQuestion = interview.questions?.[0] || 'Kerro minulle jotain.';
     
-    // Connect directly to realtime chat using Stream
-    const streamUrl = `wss://jhjbvmyfzmjrfoodphuj.supabase.co/functions/v1/realtime-chat?interviewId=${interview.id}&from=${encodeURIComponent(from)}`;
-    
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Connect>
-    <Stream url="${streamUrl}" />
-  </Connect>
+  <Say voice="alice" language="fi-FI">Hei! Aloitetaan ${interview.title}. ${firstQuestion}</Say>
+  <Gather input="speech" action="${gatherUrl}" method="POST" speechTimeout="3" language="fi-FI">
+    <Say voice="alice" language="fi-FI">Kerro nyt vastauksesi.</Say>
+  </Gather>
+  <Say voice="alice" language="fi-FI">En kuullut vastausta. Hyvää päivänjatkoa!</Say>
+  <Hangup/>
 </Response>`;
 
     return new Response(twiml, {
