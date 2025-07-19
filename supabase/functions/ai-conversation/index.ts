@@ -51,9 +51,31 @@ serve(async (req) => {
     const userInput = speechResult || '';
     console.log('User input:', userInput);
 
-    // Simulate conversation state (in production, you'd store this in database)
+    // Get or create conversation state from database
+    let { data: conversationData } = await supabase
+      .from('conversations')
+      .select('*')
+      .eq('call_sid', callSid)
+      .single();
+
+    let currentQuestionIndex = 0;
     let conversation = [];
-    
+
+    if (conversationData) {
+      currentQuestionIndex = conversationData.current_question_index || 0;
+      conversation = conversationData.messages || [];
+    } else {
+      // Create new conversation record
+      await supabase
+        .from('conversations')
+        .insert({
+          call_sid: callSid,
+          interview_id: interviewId,
+          current_question_index: 0,
+          messages: []
+        });
+    }
+
     // Add user's response to conversation
     if (userInput) {
       conversation.push({
@@ -63,37 +85,40 @@ serve(async (req) => {
       });
     }
 
-    // Generate AI response using Azure OpenAI
     const questions = interview.questions || [];
+    console.log('Current question index:', currentQuestionIndex, 'Total questions:', questions.length);
     
     let aiResponse = '';
     
-    // Track conversation state (in real app, store in database)
-    let currentQuestionIndex = 0;
-    
-    console.log('Creating system prompt with questions:', questions);
-    
-    // Create enhanced conversational prompt that uses the interview questions systematically  
-    const systemPrompt = `Olet ystävällinen haastattelija. Sinun tehtäväsi on kysyä seuraavia kysymyksiä järjestyksessä ja kuunnella vastauksia:
+    // Determine what to say based on conversation state
+    if (!userInput) {
+      // First call - start with first question
+      aiResponse = `Hei! Aloitetaan haastattelu "${interview.title}". ${questions[0]}`;
+    } else if (currentQuestionIndex < questions.length - 1) {
+      // Move to next question
+      currentQuestionIndex++;
+      aiResponse = `Kiitos vastauksesta. ${questions[currentQuestionIndex]}`;
+    } else {
+      // All questions asked
+      aiResponse = 'Kiitos kaikista vastauksista! Haastattelu on nyt valmis.';
+    }
 
-Kysymykset:
-${questions.map((q, i) => `${i + 1}. ${q}`).join('\n')}
+    console.log('Generated AI response:', aiResponse);
 
-Ohjeesi:
-- Aloita kysymyksellä numero 1
-- Kuuntele vastauksia ja kommentoi niitä lyhyesti
-- Siirry seuraavaan kysymykseen kun saat vastauksen
-- Pidä vastaukset lyhyinä (alle 30 sanaa)
-- Kun kaikki kysymykset on kysytty, kiitä
+    // Update conversation in database
+    conversation.push({
+      role: 'assistant',
+      content: aiResponse,
+      timestamp: new Date().toISOString()
+    });
 
-Käyttäjän vastaus: "${userInput}"
-
-${userInput ? 'Kommentoi vastausta ja kysy seuraava kysymys listalta.' : `Aloita kysymyksellä: "${questions[0]}"`}`;
-
-    const messages = [
-      { role: 'system', content: systemPrompt },
-      ...conversation.slice(-2), // Last 2 messages for context
-    ];
+    await supabase
+      .from('conversations')
+      .update({
+        current_question_index: currentQuestionIndex,
+        messages: conversation
+      })
+      .eq('call_sid', callSid);
 
     try {
       console.log('Making Azure OpenAI call...');
