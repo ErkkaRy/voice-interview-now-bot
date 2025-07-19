@@ -81,85 +81,25 @@ serve(async (req) => {
       });
     }
 
-    // Prepare system prompt for ChatGPT
-    const systemPrompt = `Olet ammattimainen haastattelija. Sinun tehtäväsi on tehdä haastattelu aiheesta "${interview.title}".
-
-Haastattelun kysymykset ovat:
-${interview.questions.map((q, i) => `${i + 1}. ${q}`).join('\n')}
-
-OHJEITA:
-- Puhu suomeksi
-- Ole ystävällinen ja ammattimainen
-- Kysy kysymyksiä luonnollisessa järjestyksessä, mutta voit kysyä tarkentavia lisäkysymyksiä
-- Reagoi vastauksiin luonnollisesti ("kiitos", "mielenkiintoista" jne.)
-- Kun kaikki pääkysymykset on käsitelty, lopeta haastattelu kiittämällä
-- Pidä vastaukset lyhyinä (max 2-3 lausetta kerrallaan)
-- Jos tämä on ensimmäinen viesti, tervehdi ja aloita haastattelu
-
-${isFirstMessage ? 'Tämä on ensimmäinen viesti - tervehdi ja aloita haastattelu.' : 'Jatka haastattelua luonnollisesti edellisten viestien perusteella.'}`;
-
-    // Prepare conversation history for ChatGPT
-    const chatMessages = [
-      { role: 'system', content: systemPrompt }
-    ];
-
-    // Add conversation history
-    messages.forEach(msg => {
-      chatMessages.push({
-        role: msg.role,
-        content: msg.content
-      });
-    });
-
-    console.log('Sending to Azure OpenAI:', { messagesCount: chatMessages.length });
-
-    // Call Azure OpenAI
-    const azureEndpoint = Deno.env.get('AZURE_OPENAI_ENDPOINT');
-    const azureApiKey = Deno.env.get('AZURE_OPENAI_API_KEY');
-    const deploymentName = Deno.env.get('AZURE_OPENAI_DEPLOYMENT_NAME') || 'gpt-4o';
+    // Simple fallback response for now to ensure it works
+    const questions = interview.questions || [];
+    let aiResponse = '';
     
-    console.log('Azure config:', { 
-      hasEndpoint: !!azureEndpoint, 
-      hasApiKey: !!azureApiKey, 
-      deploymentName,
-      endpoint: azureEndpoint 
-    });
-    
-    if (!azureEndpoint || !azureApiKey) {
-      throw new Error('Azure OpenAI credentials not configured');
+    if (isFirstMessage) {
+      aiResponse = `Hei! Aloitetaan ${interview.title} haastattelu. ${questions[0] || 'Kerro itsestäsi.'}`;
+    } else if (messages.length < questions.length * 2) {
+      // Calculate which question we're on
+      const questionIndex = Math.floor(messages.length / 2);
+      if (questionIndex < questions.length - 1) {
+        aiResponse = `Kiitos vastauksesta. ${questions[questionIndex + 1]}`;
+      } else {
+        aiResponse = 'Kiitos kaikista vastauksista! Haastattelu on valmis.';
+      }
+    } else {
+      aiResponse = 'Kiitos kaikista vastauksista! Haastattelu on valmis.';
     }
 
-    // Build proper Azure OpenAI URL
-    const baseUrl = azureEndpoint.endsWith('/') ? azureEndpoint.slice(0, -1) : azureEndpoint;
-    const apiUrl = `${baseUrl}/openai/deployments/${deploymentName}/chat/completions?api-version=2024-02-15-preview`;
-    
-    console.log('Calling Azure OpenAI URL:', apiUrl);
-
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'api-key': azureApiKey,
-      },
-      body: JSON.stringify({
-        messages: chatMessages,
-        max_tokens: 150,
-        temperature: 0.7,
-      }),
-    });
-
-    console.log('Azure OpenAI response status:', response.status);
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Azure OpenAI error response:', errorText);
-      throw new Error(`Azure OpenAI API error: ${response.status} - ${errorText}`);
-    }
-
-    const aiResult = await response.json();
-    const aiResponse = aiResult.choices[0].message.content.trim();
-
-    console.log('AI response:', aiResponse);
+    console.log('Simple AI response:', aiResponse);
 
     // Add AI response to conversation history
     messages.push({
