@@ -93,7 +93,7 @@ serve(async (req) => {
     const firstQuestion = interview.questions?.[0] || 'Kerro minulle jotain.';
     
     // Connect directly to realtime chat using Stream
-    const streamUrl = `wss://${Deno.env.get('SUPABASE_URL')?.replace('https://', '')}/functions/v1/realtime-chat?interviewId=${interview.id}&from=${encodeURIComponent(from)}`;
+    const streamUrl = `wss://jhjbvmyfzmjrfoodphuj.supabase.co/functions/v1/realtime-chat?interviewId=${interview.id}&from=${encodeURIComponent(from)}`;
     
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
