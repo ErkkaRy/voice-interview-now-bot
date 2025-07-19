@@ -116,12 +116,26 @@ ${isFirstMessage ? 'Tämä on ensimmäinen viesti - tervehdi ja aloita haastatte
     // Call Azure OpenAI
     const azureEndpoint = Deno.env.get('AZURE_OPENAI_ENDPOINT');
     const azureApiKey = Deno.env.get('AZURE_OPENAI_API_KEY');
+    const deploymentName = Deno.env.get('AZURE_OPENAI_DEPLOYMENT_NAME') || 'gpt-4o';
+    
+    console.log('Azure config:', { 
+      hasEndpoint: !!azureEndpoint, 
+      hasApiKey: !!azureApiKey, 
+      deploymentName,
+      endpoint: azureEndpoint 
+    });
     
     if (!azureEndpoint || !azureApiKey) {
       throw new Error('Azure OpenAI credentials not configured');
     }
 
-    const response = await fetch(`${azureEndpoint}/openai/deployments/gpt-4o/chat/completions?api-version=2024-02-15-preview`, {
+    // Build proper Azure OpenAI URL
+    const baseUrl = azureEndpoint.endsWith('/') ? azureEndpoint.slice(0, -1) : azureEndpoint;
+    const apiUrl = `${baseUrl}/openai/deployments/${deploymentName}/chat/completions?api-version=2024-02-15-preview`;
+    
+    console.log('Calling Azure OpenAI URL:', apiUrl);
+
+    const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -134,10 +148,12 @@ ${isFirstMessage ? 'Tämä on ensimmäinen viesti - tervehdi ja aloita haastatte
       }),
     });
 
+    console.log('Azure OpenAI response status:', response.status);
+
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Azure OpenAI error:', errorText);
-      throw new Error(`Azure OpenAI API error: ${response.status}`);
+      console.error('Azure OpenAI error response:', errorText);
+      throw new Error(`Azure OpenAI API error: ${response.status} - ${errorText}`);
     }
 
     const aiResult = await response.json();
