@@ -1,5 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -15,6 +16,11 @@ serve(async (req) => {
     console.log('Handling CORS preflight');
     return new Response(null, { headers: corsHeaders });
   }
+
+  // Extract interview ID from URL parameters
+  const url = new URL(req.url);
+  const interviewId = url.searchParams.get('interviewId');
+  console.log('Interview ID from URL:', interviewId);
 
   const AZURE_API_KEY = Deno.env.get('AZURE_API_KEY');
   console.log('Azure API key exists:', !!AZURE_API_KEY);
@@ -57,8 +63,32 @@ serve(async (req) => {
         azureWs = new WebSocket(azureUrl);
         console.log('Azure WebSocket created, waiting for connection...');
 
-        azureWs.onopen = () => {
+        azureWs.onopen = async () => {
           console.log('=== AZURE WEBSOCKET CONNECTED SUCCESSFULLY ===');
+          
+          // Get interview questions if interviewId is provided
+          if (interviewId) {
+            try {
+              const supabase = createClient(
+                Deno.env.get('SUPABASE_URL')!,
+                Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+              );
+              
+              const { data: interview, error } = await supabase
+                .from('interviews')
+                .select('*')
+                .eq('id', interviewId)
+                .single();
+                
+              if (interview && !error) {
+                console.log('Loaded interview questions:', interview.questions);
+                azureWs.interviewQuestions = interview.questions;
+                azureWs.interviewTitle = interview.title;
+              }
+            } catch (error) {
+              console.error('Error loading interview:', error);
+            }
+          }
         };
 
         azureWs.onmessage = (event) => {
@@ -69,22 +99,29 @@ serve(async (req) => {
           // Handle session.created event - send configuration
           if (data.type === 'session.created') {
             console.log('Session created, sending configuration');
+            
+            const questions = azureWs.interviewQuestions || ['Kerro itsestäsi.'];
+            const title = azureWs.interviewTitle || 'haastattelu';
+            
+            const questionsText = questions.map((q, i) => `${i + 1}. ${q}`).join('\n');
+            
             const sessionUpdate = {
               type: 'session.update',
               session: {
                 modalities: ["text", "audio"],
-                instructions: `Olet avulias ja keskusteleva suomenkielinen haastattelija. Toimi seuraavasti:
+                instructions: `Olet suomenkielinen haastattelija. 
 
-1. Aloita tervehtimällä lämpimästi ja kerro mistä haastattelusta on kyse
-2. Kysele haastattelukysymyksiä luonnollisesti keskustellen - älä lue niitä robotin tavoin
-3. Kuuntele vastauksia tarkasti ja kysy tarkentavia jatkokysymyksiä
-4. Jos joku vastaa negatiivisesti (esim. "ruoka ei ollut hyvää" tai "menu ei ollut riittävän laaja"), kysy aina: "Mitä puuttui?" tai "Voisitko kertoa tarkemmin?"
-5. Ole kiinnostunut ja empaattinen
-6. Pidä keskustelu sujuvana ja luonnollisena
-7. Kysy yksi kysymys kerrallaan
-8. Voit kommentoida vastauksia lyhyesti ennen seuraavaa kysymystä
+ALOITA HETI: "Hei! Aloitetaan ${title}. ${questions[0]}"
 
-Haastattelukysymykset joita voit käyttää pohjana, mutta sovella niitä tilanteeseen sopivaksi ja tee tarkentavia kysymyksiä vastausten perusteella.`,
+KÄYTÄ NÄITÄ KYSYMYKSIÄ JÄRJESTYKSESSÄ:
+${questionsText}
+
+SÄÄNNÖT:
+- KYSY yksi kysymys kerrallaan
+- ODOTA vastaus ennen seuraavaa 
+- Pidä vastaukset lyhyinä (alle 20 sanaa)
+- Kun kaikki kysytty: "Kiitos! Haastattelu valmis."
+- ÄLÄ keksi lisäkysymyksiä`,
                 voice: "alloy",
                 input_audio_format: "pcm16",
                 output_audio_format: "pcm16",
@@ -97,11 +134,20 @@ Haastattelukysymykset joita voit käyttää pohjana, mutta sovella niitä tilant
                   prefix_padding_ms: 300,
                   silence_duration_ms: 1000
                 },
-                temperature: 0.8,
-                max_response_output_tokens: "inf"
+                temperature: 0.7,
+                max_response_output_tokens: 100
               }
             };
             azureWs?.send(JSON.stringify(sessionUpdate));
+            
+            // Auto-start the interview
+            setTimeout(() => {
+              if (azureWs && azureWs.readyState === WebSocket.OPEN) {
+                azureWs.send(JSON.stringify({
+                  type: 'response.create'
+                }));
+              }
+            }, 500);
           }
           
           // Forward all messages to client

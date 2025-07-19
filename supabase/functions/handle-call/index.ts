@@ -92,21 +92,14 @@ serve(async (req) => {
     
     const firstQuestion = interview.questions?.[0] || 'Kerro minulle jotain.';
     
+    // Connect directly to realtime chat using Stream
+    const streamUrl = `wss://${Deno.env.get('SUPABASE_URL')?.replace('https://', '')}/functions/v1/realtime-chat?interviewId=${interview.id}&from=${encodeURIComponent(from)}`;
+    
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say voice="alice" language="fi-FI">Hei! Aloitetaan haastattelu ${interview.title}. ${firstQuestion}</Say>
-  <Gather 
-    input="speech"
-    timeout="10"
-    speechTimeout="3"
-    speechModel="phone_call"
-    enhanced="true"
-    language="fi-FI"
-    action="${gatherUrl}?interviewId=${interview.id}&amp;from=${encodeURIComponent(from)}"
-    method="POST"
-  />
-  <Say voice="alice" language="fi-FI">En kuullut vastausta. Lopetan puhelun.</Say>
-  <Hangup/>
+  <Connect>
+    <Stream url="${streamUrl}" />
+  </Connect>
 </Response>`;
 
     return new Response(twiml, {
