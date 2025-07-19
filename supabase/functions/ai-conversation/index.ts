@@ -136,10 +136,8 @@ serve(async (req) => {
     language="fi-FI"
     action="${Deno.env.get('SUPABASE_URL')}/functions/v1/ai-conversation?interviewId=${interviewId}&from=${from}"
     method="POST"
-  >
-    <Say voice="alice" language="fi-FI">Kuuntelen...</Say>
-  </Gather>
-  <Say voice="alice" language="fi-FI">Kiitos haastattelusta! Hyvää päivänjatkoa.</Say>
+  />
+  <Say voice="alice" language="fi-FI">En kuullut vastausta. Lopetan puhelun.</Say>
   <Hangup/>
 </Response>`;
 
