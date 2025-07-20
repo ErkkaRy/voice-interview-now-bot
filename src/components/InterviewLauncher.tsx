@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Phone, MessageSquare, Loader2, Edit, Mic } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { VoiceChat } from "@/components/VoiceChat";
+import VoiceChat from "@/components/VoiceChat";
 
 interface InterviewLauncherProps {
   interviews: any[];

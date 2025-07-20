@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { FileText, Upload, Plus, Trash2, Phone, Mic, ArrowLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { VoiceChat } from "@/components/VoiceChat";
+import VoiceChat from "@/components/VoiceChat";
 
 interface InterviewCreatorProps {
   onInterviewCreated?: () => void;
