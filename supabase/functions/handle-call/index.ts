@@ -97,10 +97,10 @@ serve(async (req) => {
     
     const firstQuestion = interview.questions?.[0] || 'Kerro minulle jotain.';
     
-    // Test with Gather but fixed URL
+    // Start with the first interview question directly
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say voice="alice" language="fi-FI">Hei! Aloitetaan haastattelu. Kerro itsestasi.</Say>
+  <Say voice="alice" language="fi-FI">Hei! Aloitetaan ${interview.title} haastattelu. ${firstQuestion}</Say>
   <Gather input="speech" action="https://jhjbvmyfzmjrfoodphuj.supabase.co/functions/v1/ai-conversation" method="POST" speechTimeout="3" language="fi-FI" />
   <Say voice="alice" language="fi-FI">En kuullut vastausta. Hyvaa paivaa!</Say>
   <Hangup/>
