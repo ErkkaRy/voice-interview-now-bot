@@ -95,10 +95,12 @@ serve(async (req) => {
       gatherUrl: gatherUrl
     });
     
-    // Just greet and pass to ai-conversation for first question
+    const firstQuestion = interview.questions?.[0] || 'Kerro minulle jotain.';
+    
+    // Ask the first question directly in handle-call
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say voice="alice" language="fi-FI">Hei! Aloitetaan ${interview.title} haastattelu.</Say>
+  <Say voice="alice" language="fi-FI">Hei! Aloitetaan ${interview.title} haastattelu. ${firstQuestion}</Say>
   <Gather input="speech" action="https://jhjbvmyfzmjrfoodphuj.supabase.co/functions/v1/ai-conversation" method="POST" speechTimeout="3" language="fi-FI" />
   <Say voice="alice" language="fi-FI">En kuullut vastausta. Hyvaa paivaa!</Say>
   <Hangup/>

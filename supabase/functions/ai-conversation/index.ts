@@ -73,7 +73,7 @@ serve(async (req) => {
     }
 
     // Add user's response to conversation history
-    if (!isFirstMessage && speechResult) {
+    if (speechResult) {
       messages.push({
         role: 'user',
         content: speechResult,
@@ -99,11 +99,11 @@ serve(async (req) => {
     });
     
     if (isFirstMessage || currentQuestionIndex === 0) {
-      // First question - make sure to use the actual first question
-      if (questions.length > 0) {
-        aiResponse = `Hei! Aloitetaan ${interview.title} haastattelu. ${questions[0]}`;
+      // First response - don't repeat greeting, just move to next question if there is one
+      if (questions.length > 1) {
+        aiResponse = `Kiitos vastauksesta. ${questions[1]}`;
       } else {
-        aiResponse = `Hei! Aloitetaan ${interview.title} haastattelu. Kerro itsestäsi.`;
+        aiResponse = 'Kiitos vastauksesta! Haastattelu on valmis.';
       }
     } else if (currentQuestionIndex < questions.length) {
       // Ask next question
