@@ -8,6 +8,11 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  console.log('=== HANDLE-CALL FUNCTION STARTED ===');
+  console.log('Method:', req.method);
+  console.log('URL:', req.url);
+  console.log('Headers:', Object.fromEntries(req.headers.entries()));
+  
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -106,7 +111,10 @@ serve(async (req) => {
   <Hangup/>
 </Response>`;
     return new Response(twiml, {
-      headers: { ...corsHeaders, 'Content-Type': 'text/xml' }
+      headers: { 
+        ...corsHeaders, 
+        'Content-Type': 'text/xml; charset=utf-8'
+      }
     });
   }
 });
