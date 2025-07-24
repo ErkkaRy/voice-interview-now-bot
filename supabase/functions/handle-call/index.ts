@@ -92,17 +92,14 @@ serve(async (req) => {
     
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say voice="alice" language="fi-FI">Hei! Yhdistan sinut haastattelija-AI:hin. Odota hetki...</Say>
-  <Start>
+  <Say voice="alice" language="fi-FI">Hei! Yhdistan sinut haastattelija-AI:hin.</Say>
+  <Connect>
     <Stream url="${streamUrl}">
       <Parameter name="interviewId" value="${interview.id}" />
       <Parameter name="from" value="${from}" />
     </Stream>
-  </Start>
-  <Say voice="alice" language="fi-FI">Voit nyt puhua AI:n kanssa. Puhelu kestää enintään 10 minuuttia.</Say>
-  <Pause length="600"/>
-  <Say voice="alice" language="fi-FI">Aika loppui. Kiitos haastattelusta!</Say>
-  <Hangup/>
+  </Connect>
+  <Say voice="alice" language="fi-FI">Puhelu päättyi.</Say>
 </Response>`;
 
     return new Response(twiml, {
