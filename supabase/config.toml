@@ -53,3 +53,6 @@ verify_jwt = false
 
 [functions.handle-sms]
 verify_jwt = false
+
+[functions.twilio-stream]
+verify_jwt = false
