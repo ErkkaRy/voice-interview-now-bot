@@ -53,6 +53,8 @@ serve(async (req) => {
     const { socket, response } = Deno.upgradeWebSocket(req);
     console.log('WebSocket upgrade successful');
     let openaiWs: WebSocket | null = null;
+    let isTwilioStream = false;
+    let twilioSequenceNumber = 0;
 
     socket.onopen = async () => {
       console.log('=== CLIENT WEBSOCKET OPENED ===');
@@ -158,8 +160,21 @@ SÄÄNNÖT:
             }, 500);
           }
           
-          // Forward all messages to client
-          socket.send(event.data);
+          // Handle audio response from OpenAI
+          if (data.type === 'response.audio.delta' && isTwilioStream) {
+            // Convert OpenAI audio back to Twilio format and send
+            const twilioMessage = {
+              event: 'media',
+              sequenceNumber: (++twilioSequenceNumber).toString(),
+              media: {
+                payload: data.delta
+              }
+            };
+            socket.send(JSON.stringify(twilioMessage));
+          } else {
+            // Forward all messages to client (for web clients)
+            socket.send(event.data);
+          }
         };
 
         openaiWs.onerror = (error) => {
@@ -186,8 +201,46 @@ SÄÄNNÖT:
 
     socket.onmessage = (event) => {
       console.log('Message from client:', event.data);
-      if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
-        openaiWs.send(event.data);
+      
+      try {
+        const message = JSON.parse(event.data);
+        
+        // Detect Twilio stream messages
+        if (message.event === 'start') {
+          console.log('Twilio stream started');
+          isTwilioStream = true;
+          return;
+        }
+        
+        if (message.event === 'media' && isTwilioStream) {
+          // Convert Twilio audio to OpenAI format
+          const openaiMessage = {
+            type: 'input_audio_buffer.append',
+            audio: message.media.payload
+          };
+          
+          if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
+            openaiWs.send(JSON.stringify(openaiMessage));
+          }
+          return;
+        }
+        
+        if (message.event === 'stop') {
+          console.log('Twilio stream stopped');
+          isTwilioStream = false;
+          return;
+        }
+        
+        // For web clients, forward messages directly
+        if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
+          openaiWs.send(event.data);
+        }
+        
+      } catch (error) {
+        // If it's not JSON, treat as raw data and forward
+        if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
+          openaiWs.send(event.data);
+        }
       }
     };
 

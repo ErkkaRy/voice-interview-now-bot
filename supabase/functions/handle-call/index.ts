@@ -81,24 +81,27 @@ serve(async (req) => {
 
     console.log('Starting interview:', interview.title);
 
-    // Use traditional Gather approach instead of Stream for better compatibility
-    const gatherUrl = `https://jhjbvmyfzmjrfoodphuj.supabase.co/functions/v1/ai-conversation`;
+    // Use Stream for real-time audio processing with OpenAI
+    const streamUrl = `wss://jhjbvmyfzmjrfoodphuj.supabase.co/functions/v1/realtime-chat?interviewId=${interview.id}&from=${from}`;
     
-    console.log('Creating TwiML response with:', {
+    console.log('Creating TwiML response with Stream:', {
       interviewId: interview.id,
       from: from,
-      gatherUrl: gatherUrl
+      streamUrl: streamUrl
     });
-    
-    const firstQuestion = interview.questions?.[0] || 'Kerro minulle jotain.';
     
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say voice="alice" language="fi-FI">Hei! Aloitetaan ${interview.title}. ${firstQuestion}</Say>
-  <Gather input="speech" action="${gatherUrl}" method="POST" speechTimeout="3" language="fi-FI">
-    <Say voice="alice" language="fi-FI">Kerro nyt vastauksesi.</Say>
-  </Gather>
-  <Say voice="alice" language="fi-FI">En kuullut vastausta. Hyvää päivänjatkoa!</Say>
+  <Say voice="alice" language="fi-FI">Hei! Yhdistan sinut haastattelija-AI:hin. Odota hetki...</Say>
+  <Start>
+    <Stream url="${streamUrl}">
+      <Parameter name="interviewId" value="${interview.id}" />
+      <Parameter name="from" value="${from}" />
+    </Stream>
+  </Start>
+  <Say voice="alice" language="fi-FI">Voit nyt puhua AI:n kanssa. Puhelu kestää enintään 10 minuuttia.</Say>
+  <Pause length="600"/>
+  <Say voice="alice" language="fi-FI">Aika loppui. Kiitos haastattelusta!</Say>
   <Hangup/>
 </Response>`;
 
