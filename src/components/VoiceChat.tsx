@@ -1,95 +1,82 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Mic, MicOff, Volume2, VolumeX, X } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { RealtimeChat } from '@/utils/RealtimeAudio';
-import { Mic, MicOff, Phone, PhoneOff } from 'lucide-react';
 
 interface VoiceChatProps {
-  interview?: {
+  interview: {
     title: string;
     questions: string[];
   };
-  onClose?: () => void;
+  onClose: () => void;
 }
 
-interface Message {
-  role: 'user' | 'assistant';
-  content: string;
-  timestamp: Date;
-}
-
-const VoiceChat: React.FC<VoiceChatProps> = ({ interview, onClose }) => {
-  const { toast } = useToast();
+export const VoiceChat: React.FC<VoiceChatProps> = ({ interview, onClose }) => {
   const [isConnected, setIsConnected] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [isAISpeaking, setIsAISpeaking] = useState(false);
-  const chatRef = useRef<RealtimeChat | null>(null);
+  const [conversation, setConversation] = useState<Array<{role: string, content: string, type?: string}>>([]);
+  const { toast } = useToast();
+  
+  const realtimeChatRef = useRef<RealtimeChat | null>(null);
+
+  useEffect(() => {
+    return () => {
+      realtimeChatRef.current?.disconnect();
+    };
+  }, []);
 
   const handleMessage = (event: any) => {
-    console.log('Received event:', event.type);
+    console.log('Received message:', event);
     
-    if (event.type === 'response.audio_transcript.delta') {
-      // Handle AI speech transcript
-      setMessages(prev => {
-        const newMessages = [...prev];
-        const lastMessage = newMessages[newMessages.length - 1];
-        
-        if (lastMessage && lastMessage.role === 'assistant') {
-          lastMessage.content += event.delta;
-        } else {
-          newMessages.push({
-            role: 'assistant',
-            content: event.delta,
-            timestamp: new Date()
-          });
-        }
-        
-        return newMessages;
-      });
-    } else if (event.type === 'conversation.item.input_audio_transcription.completed') {
-      // Handle user speech transcript
-      setMessages(prev => [...prev, {
-        role: 'user',
-        content: event.transcript,
-        timestamp: new Date()
-      }]);
-    } else if (event.type === 'response.audio.delta') {
-      setIsAISpeaking(true);
+    if (event.type === 'response.audio.delta') {
+      setIsSpeaking(true);
     } else if (event.type === 'response.audio.done') {
-      setIsAISpeaking(false);
-    } else if (event.type === 'session.created') {
-      console.log('Session created successfully');
-    } else if (event.type === 'session.updated') {
-      console.log('Session updated successfully');
+      setIsSpeaking(false);
+    } else if (event.type === 'response.audio_transcript.delta') {
+      setConversation(prev => {
+        const lastMessage = prev[prev.length - 1];
+        if (lastMessage && lastMessage.role === 'assistant' && lastMessage.type === 'transcript') {
+          // Update existing transcript
+          return [
+            ...prev.slice(0, -1),
+            { ...lastMessage, content: lastMessage.content + event.delta }
+          ];
+        } else {
+          // Add new transcript message
+          return [...prev, { role: 'assistant', content: event.delta, type: 'transcript' }];
+        }
+      });
+    } else if (event.type === 'input_audio_buffer.speech_started') {
+      console.log('Speech started');
+    } else if (event.type === 'input_audio_buffer.speech_stopped') {
+      console.log('Speech stopped');
+    } else if (event.type === 'conversation.item.input_audio_transcription.completed') {
+      setConversation(prev => [...prev, { 
+        role: 'user', 
+        content: event.transcript,
+        type: 'transcript'
+      }]);
     }
   };
 
   const startConversation = async () => {
-    setIsConnecting(true);
     try {
-      chatRef.current = new RealtimeChat(
-        handleMessage,
-        () => {
-          setIsConnected(true);
-          setIsConnecting(false);
-          toast({
-            title: "Yhdistetty",
-            description: "Äänichatti on valmis käyttöön",
-          });
-        },
-        () => {
-          setIsConnected(false);
-          setIsConnecting(false);
-          setIsAISpeaking(false);
-        }
-      );
-      
-      await chatRef.current.connect();
-    } catch (error) {
+      setIsConnecting(true);
+      realtimeChatRef.current = new RealtimeChat(handleMessage);
+      await realtimeChatRef.current.init(interview.questions);
+      setIsConnected(true);
       setIsConnecting(false);
+      
+      toast({
+        title: "Yhdistetty",
+        description: "Voice chat on valmis käyttöön",
+      });
+    } catch (error) {
       console.error('Error starting conversation:', error);
+      setIsConnecting(false);
       toast({
         title: "Virhe",
         description: error instanceof Error ? error.message : 'Yhteyden muodostaminen epäonnistui',
@@ -99,145 +86,100 @@ const VoiceChat: React.FC<VoiceChatProps> = ({ interview, onClose }) => {
   };
 
   const endConversation = () => {
-    chatRef.current?.disconnect();
+    realtimeChatRef.current?.disconnect();
     setIsConnected(false);
-    setIsAISpeaking(false);
-    setMessages([]);
-    
-    toast({
-      title: "Yhteys katkaisttu",
-      description: "Äänichatti on lopetettu",
-    });
-    
-    // Close modal if onClose is provided
-    onClose?.();
+    setIsSpeaking(false);
+    setConversation([]);
   };
 
-  useEffect(() => {
-    return () => {
-      chatRef.current?.disconnect();
-    };
-  }, []);
-
-  const isModal = !!onClose;
-  const title = interview?.title || "OpenAI Äänichatti";
-
-  const content = (
-    <div className="w-full max-w-2xl mx-auto space-y-6">
-      <Card>
-        <CardHeader className={isModal ? "flex flex-row items-center justify-between" : ""}>
-          <CardTitle className="flex items-center gap-2">
-            <Mic className="h-6 w-6" />
-            {title}
-          </CardTitle>
-          {isModal && onClose && (
-            <Button variant="ghost" size="sm" onClick={onClose}>
-              <PhoneOff className="h-4 w-4" />
-            </Button>
-          )}
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <Card className="w-full max-w-2xl mx-4 max-h-[80vh] overflow-hidden">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>Voice Chat - {interview.title}</CardTitle>
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            <X className="h-4 w-4" />
+          </Button>
         </CardHeader>
+        
         <CardContent className="space-y-4">
-          <div className="flex justify-center">
+          {/* Conversation Display */}
+          <div className="h-64 overflow-y-auto border rounded p-4 space-y-2">
+            {conversation.map((message, index) => (
+              <div 
+                key={index} 
+                className={`p-2 rounded ${
+                  message.role === 'assistant' 
+                    ? 'bg-blue-100 text-blue-900' 
+                    : 'bg-gray-100 text-gray-900 ml-8'
+                }`}
+              >
+                <strong>{message.role === 'assistant' ? 'AI: ' : 'Sinä: '}</strong>
+                {message.content}
+              </div>
+            ))}
+          </div>
+
+          {/* Current Status */}
+          <div className="text-center p-4 border rounded">
+            {isConnecting && (
+              <div className="flex items-center justify-center gap-2 text-blue-600">
+                <Volume2 className="h-5 w-5 animate-pulse" />
+                <span>Yhdistetään...</span>
+              </div>
+            )}
+            
+            {isSpeaking && isConnected && (
+              <div className="flex items-center justify-center gap-2 text-blue-600">
+                <Volume2 className="h-5 w-5 animate-pulse" />
+                <span>AI puhuu...</span>
+              </div>
+            )}
+            
+            {isConnected && !isSpeaking && !isConnecting && (
+              <div className="text-green-600">
+                <Mic className="h-5 w-5 mx-auto mb-2" />
+                <span>Voit puhua - AI kuuntelee</span>
+              </div>
+            )}
+            
+            {!isConnected && !isConnecting && (
+              <div className="text-gray-600">
+                Paina "Aloita keskustelu" aloittaaksesi
+              </div>
+            )}
+          </div>
+
+          {/* Controls */}
+          <div className="flex justify-center gap-4">
             {!isConnected ? (
-              <Button 
+              <Button
                 onClick={startConversation}
                 disabled={isConnecting}
-                className="bg-primary hover:bg-primary/90 text-white"
+                className="bg-blue-500 hover:bg-blue-600"
                 size="lg"
               >
-                {isConnecting ? (
-                  <>
-                    <Phone className="mr-2 h-4 w-4 animate-pulse" />
-                    Yhdistetään...
-                  </>
-                ) : (
-                  <>
-                    <Phone className="mr-2 h-4 w-4" />
-                    Aloita keskustelu
-                  </>
-                )}
+                <Mic className="h-5 w-5 mr-2" />
+                {isConnecting ? 'Yhdistetään...' : 'Aloita keskustelu'}
               </Button>
             ) : (
-              <Button 
+              <Button
                 onClick={endConversation}
-                variant="destructive"
+                className="bg-red-500 hover:bg-red-600"
                 size="lg"
               >
-                <PhoneOff className="mr-2 h-4 w-4" />
+                <MicOff className="h-5 w-5 mr-2" />
                 Lopeta keskustelu
               </Button>
             )}
           </div>
 
-          {isConnected && (
-            <div className="text-center">
-              <div className="flex items-center justify-center gap-2 mb-2">
-                {isAISpeaking ? (
-                  <>
-                    <MicOff className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm text-muted-foreground">AI puhuu...</span>
-                  </>
-                ) : (
-                  <>
-                    <Mic className="h-4 w-4 text-green-500" />
-                    <span className="text-sm text-green-600">Voit puhua nyt</span>
-                  </>
-                )}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Mikrofoni on aktiivinen. Puhu suomeksi!
-              </p>
-            </div>
-          )}
+          <div className="text-sm text-gray-500 text-center">
+            <p>OpenAI gpt-4o-realtime-preview -malli käytössä</p>
+            <p>AI kuuntelee puheesi ja vastaa äänellä reaaliajassa</p>
+          </div>
         </CardContent>
       </Card>
-
-      {messages.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Keskustelu</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3 max-h-80 overflow-y-auto">
-              {messages.map((message, index) => (
-                <div
-                  key={index}
-                  className={`p-3 rounded-lg ${
-                    message.role === 'user'
-                      ? 'bg-primary/10 text-primary ml-4'
-                      : 'bg-muted mr-4'
-                  }`}
-                >
-                  <div className="flex justify-between items-start gap-2">
-                    <p className="text-sm">{message.content}</p>
-                    <span className="text-xs text-muted-foreground whitespace-nowrap">
-                      {message.timestamp.toLocaleTimeString('fi-FI', { 
-                        hour: '2-digit', 
-                        minute: '2-digit' 
-                      })}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
-
-  // Render as modal if onClose is provided
-  if (isModal) {
-    return (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-        <div className="w-full max-w-2xl mx-4 max-h-[80vh] overflow-auto">
-          {content}
-        </div>
-      </div>
-    );
-  }
-
-  return content;
 };
-
-export default VoiceChat;

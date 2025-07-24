@@ -1,7 +1,6 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import "https://deno.land/x/xhr@0.1.0/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -14,12 +13,20 @@ serve(async (req) => {
   }
 
   try {
-    console.log('=== AI-CONVERSATION FUNCTION START ===');
+    const url = new URL(req.url);
+    const interviewId = url.searchParams.get('interviewId');
+    const from = url.searchParams.get('from');
     const formData = await req.formData();
+    
     const speechResult = formData.get('SpeechResult')?.toString() || '';
     const callSid = formData.get('CallSid')?.toString() || '';
     
-    console.log('Speech received:', { speechResult, callSid });
+    console.log('Speech received:', { interviewId, from, speechResult, callSid });
+    console.log('CallSid type and value:', typeof callSid, callSid);
+
+    if (!interviewId) {
+      throw new Error('Interview ID is required');
+    }
 
     // Initialize Supabase client
     const supabase = createClient(
@@ -27,12 +34,11 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    // Get the latest interview (fallback for now)
+    // Get interview details
     const { data: interview, error: interviewError } = await supabase
       .from('interviews')
       .select('*')
-      .order('created_at', { ascending: false })
-      .limit(1)
+      .eq('id', interviewId)
       .single();
 
     if (interviewError || !interview) {
@@ -40,121 +46,123 @@ serve(async (req) => {
       throw new Error('Interview not found');
     }
 
-    console.log('Using interview:', interview.title);
+    console.log('Found interview:', interview.title, 'with questions:', interview.questions);
 
-    // Get or create conversation state
+    // Get user's speech input
+    const userInput = speechResult || '';
+    console.log('User input:', userInput);
+
+    // Get or create conversation state from database
+    console.log('Looking for conversation with call_sid:', callSid);
     let { data: conversationData, error: conversationError } = await supabase
       .from('conversations')
       .select('*')
       .eq('call_sid', callSid)
       .maybeSingle();
 
-    let messages = [];
-    let isFirstMessage = false;
-    
+    console.log('Conversation query result:', { conversationData, conversationError });
+
+    if (conversationError) {
+      console.error('Error fetching conversation:', conversationError);
+      throw new Error('Database error: ' + conversationError.message);
+    }
+
+    let currentQuestionIndex = 0;
+    let conversation = [];
+
     if (conversationData) {
-      messages = conversationData.messages || [];
-      console.log('Existing conversation, messages count:', messages.length);
+      currentQuestionIndex = conversationData.current_question_index || 0;
+      conversation = conversationData.messages || [];
+      console.log('Found existing conversation, current question index:', currentQuestionIndex);
     } else {
-      console.log('Creating new conversation');
-      isFirstMessage = true;
+      console.log('Creating new conversation record');
+      // Create new conversation record
       const { error: insertError } = await supabase
         .from('conversations')
         .insert({
           call_sid: callSid,
-          interview_id: interview.id,
+          interview_id: interviewId,
           current_question_index: 0,
           messages: []
         });
       
       if (insertError) {
         console.error('Error creating conversation:', insertError);
+        throw new Error('Failed to create conversation: ' + insertError.message);
       }
     }
 
-    // Add user's response to conversation history
-    if (speechResult) {
-      messages.push({
+    // Add user's response to conversation
+    if (userInput) {
+      conversation.push({
         role: 'user',
-        content: speechResult,
+        content: userInput,
         timestamp: new Date().toISOString()
       });
     }
 
-    // Simple fallback response for now to ensure it works
     const questions = interview.questions || [];
+    console.log('Current question index:', currentQuestionIndex, 'Total questions:', questions.length);
+    
     let aiResponse = '';
     
-    // Count only user messages to track progress
-    const userMessages = messages.filter(msg => msg.role === 'user');
-    const currentQuestionIndex = userMessages.length;
-    
-    console.log('Question tracking:', { 
-      totalQuestions: questions.length, 
-      userMessagesCount: userMessages.length, 
-      currentQuestionIndex,
-      isFirstMessage,
-      firstQuestion: questions[0],
-      allQuestions: questions
-    });
-    
-    if (isFirstMessage || currentQuestionIndex === 0) {
-      // First response - don't repeat greeting, just move to next question if there is one
-      if (questions.length > 1) {
-        aiResponse = `Kiitos vastauksesta. ${questions[1]}`;
-      } else {
-        aiResponse = 'Kiitos vastauksesta! Haastattelu on valmis.';
-      }
-    } else if (currentQuestionIndex < questions.length) {
-      // Ask next question
+    // Determine what to say based on conversation state
+    if (!userInput) {
+      // First call - should not happen since handle-call asks first question
+      aiResponse = `Hei! Aloitetaan haastattelu "${interview.title}". ${questions[0]}`;
+    } else if (currentQuestionIndex < questions.length - 1) {
+      // Move to next question
+      currentQuestionIndex++;
       aiResponse = `Kiitos vastauksesta. ${questions[currentQuestionIndex]}`;
     } else {
-      // All questions answered
-      aiResponse = 'Kiitos kaikista vastauksista! Haastattelu on valmis.';
+      // All questions asked
+      aiResponse = 'Kiitos kaikista vastauksista! Haastattelu on nyt valmis.';
     }
 
-    console.log('Simple AI response:', aiResponse);
+    console.log('Generated AI response:', aiResponse);
 
-    // Add AI response to conversation history
-    messages.push({
+    // Update conversation in database
+    conversation.push({
       role: 'assistant',
       content: aiResponse,
       timestamp: new Date().toISOString()
     });
 
-    // Update conversation in database
-    await supabase
+    const { error: updateError } = await supabase
       .from('conversations')
-      .update({ 
-        messages: messages,
-        updated_at: new Date().toISOString()
+      .update({
+        current_question_index: currentQuestionIndex,
+        messages: conversation
       })
       .eq('call_sid', callSid);
 
-    // Check if conversation should end
-    const shouldEnd = aiResponse.toLowerCase().includes('lopetan') || 
-                     aiResponse.toLowerCase().includes('kiitos kaikista') ||
-                     aiResponse.toLowerCase().includes('haastattelu on valmis');
+    if (updateError) {
+      console.error('Error updating conversation:', updateError);
+      // Continue anyway, don't break the call
+    }
 
-    // Create TwiML response
-    let twiml = '';
-    if (shouldEnd) {
-      twiml = `<?xml version="1.0" encoding="UTF-8"?>
+    console.log('Generated AI response:', aiResponse);
+
+    // Create TwiML response with continued conversation
+    let twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Say voice="alice" language="fi-FI">${aiResponse}</Say>
-  <Hangup/>
-</Response>`;
-    } else {
-      twiml = `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Say voice="alice" language="fi-FI">${aiResponse}</Say>
-  <Gather input="speech" action="https://jhjbvmyfzmjrfoodphuj.supabase.co/functions/v1/ai-conversation" method="POST" speechTimeout="3" language="fi-FI" />
+  <Gather 
+    input="speech"
+    timeout="10"
+    speechTimeout="3"
+    speechModel="phone_call"
+    enhanced="true"
+    language="fi-FI"
+    action="${Deno.env.get('SUPABASE_URL')}/functions/v1/ai-conversation?interviewId=${interviewId}&from=${from}"
+    method="POST"
+  />
   <Say voice="alice" language="fi-FI">En kuullut vastausta. Lopetan puhelun.</Say>
   <Hangup/>
 </Response>`;
-    }
 
-    console.log('Returning TwiML:', twiml);
+    console.log('Generated TwiML:', twiml);
+    console.log('Returning TwiML response with Content-Type: text/xml');
 
     return new Response(twiml, {
       headers: { ...corsHeaders, 'Content-Type': 'text/xml' }

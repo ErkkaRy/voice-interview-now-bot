@@ -13,10 +13,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log('=== HANDLE-CALL FUNCTION START ===');
     const formData = await req.formData();
-    console.log('FormData received successfully');
-    
     const callSid = formData.get('CallSid');
     const from = formData.get('From');
     const to = formData.get('To');
@@ -24,12 +21,10 @@ serve(async (req) => {
     console.log('Incoming call:', { callSid, from, to });
 
     // Initialize Supabase client
-    console.log('Initializing Supabase client...');
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
-    console.log('Supabase client initialized');
 
     console.log('Received call from:', from, 'to:', to);
 
@@ -87,7 +82,7 @@ serve(async (req) => {
     console.log('Starting interview:', interview.title);
 
     // Use traditional Gather approach instead of Stream for better compatibility
-    const gatherUrl = `https://jhjbvmyfzmjrfoodphuj.supabase.co/functions/v1/ai-conversation?interviewId=${interview.id}&from=${encodeURIComponent(from)}`;
+    const gatherUrl = `https://jhjbvmyfzmjrfoodphuj.supabase.co/functions/v1/ai-conversation`;
     
     console.log('Creating TwiML response with:', {
       interviewId: interview.id,
@@ -97,18 +92,15 @@ serve(async (req) => {
     
     const firstQuestion = interview.questions?.[0] || 'Kerro minulle jotain.';
     
-    // Ask the first question directly in handle-call
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say voice="alice" language="fi-FI">Hei! Aloitetaan ${interview.title} haastattelu. ${firstQuestion}</Say>
-  <Gather input="speech" action="https://jhjbvmyfzmjrfoodphuj.supabase.co/functions/v1/ai-conversation" method="POST" speechTimeout="3" language="fi-FI" />
-  <Say voice="alice" language="fi-FI">En kuullut vastausta. Hyvaa paivaa!</Say>
+  <Say voice="alice" language="fi-FI">Hei! Aloitetaan ${interview.title}. ${firstQuestion}</Say>
+  <Gather input="speech" action="${gatherUrl}" method="POST" speechTimeout="3" language="fi-FI">
+    <Say voice="alice" language="fi-FI">Kerro nyt vastauksesi.</Say>
+  </Gather>
+  <Say voice="alice" language="fi-FI">En kuullut vastausta. Hyvää päivänjatkoa!</Say>
   <Hangup/>
 </Response>`;
-
-    console.log('Generated simple TwiML:', twiml);
-    console.log('TwiML length:', twiml.length);
-    console.log('Returning TwiML with Content-Type: text/xml');
 
     return new Response(twiml, {
       headers: { ...corsHeaders, 'Content-Type': 'text/xml' }

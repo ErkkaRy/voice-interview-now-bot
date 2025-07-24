@@ -187,107 +187,162 @@ export const resetAudioQueue = () => {
 
 export class RealtimeChat {
   private ws: WebSocket | null = null;
-  private audioContext: AudioContext;
+  private audioContext: AudioContext | null = null;
   private recorder: AudioRecorder | null = null;
-  private isConnected = false;
+  private onMessageCallback: (message: any) => void;
 
-  constructor(
-    private onMessage: (message: any) => void,
-    private onConnect: () => void,
-    private onDisconnect: () => void
-  ) {
-    this.audioContext = new AudioContext({ sampleRate: 24000 });
+  constructor(onMessage: (message: any) => void) {
+    this.onMessageCallback = onMessage;
   }
 
-  async connect() {
+  async init(interviewQuestions: string[]) {
     try {
-      // Request microphone access
-      await navigator.mediaDevices.getUserMedia({ audio: true });
+      this.audioContext = new AudioContext({ sampleRate: 24000 });
+      console.log('Audio context created, state:', this.audioContext.state);
       
-      this.ws = new WebSocket(`wss://jhjbvmyfzmjrfoodphuj.functions.supabase.co/functions/v1/realtime-chat`);
+      // Resume audio context if suspended
+      if (this.audioContext.state === 'suspended') {
+        await this.audioContext.resume();
+        console.log('Audio context resumed, new state:', this.audioContext.state);
+      }
+      
+      // Get Azure API key from Supabase
+      const { data, error } = await supabase.functions.invoke('get-azure-key');
+      
+      if (error) {
+        console.error('Error invoking get-azure-key function:', error);
+        throw new Error(`Failed to get Azure API key: ${error.message}`);
+      }
+      
+      if (!data?.apiKey) {
+        console.error('No API key in response:', data);
+        throw new Error('Failed to get Azure API key: No key returned');
+      }
+      
+      const apiKey = data.apiKey;
+
+      // Connect directly to Azure OpenAI
+      const azureUrl = `wss://erkka-ma03prm3-eastus2.cognitiveservices.azure.com/openai/realtime?api-version=2024-10-01-preview&deployment=gpt-4o-realtime-preview&api-key=${apiKey}`;
+      console.log('Connecting directly to Azure OpenAI...');
+      
+      this.ws = new WebSocket(azureUrl);
       
       this.ws.onopen = () => {
-        console.log('Connected to realtime chat');
-        this.isConnected = true;
-        this.onConnect();
-        this.startRecording();
+        console.log('Connected directly to Azure OpenAI');
       };
 
       this.ws.onmessage = async (event) => {
         const data = JSON.parse(event.data);
-        console.log('Received message:', data.type);
+        console.log('Received message from Azure OpenAI:', data.type, data);
         
-        this.onMessage(data);
-        
-        if (data.type === 'response.audio.delta' && data.delta) {
-          // Convert base64 to Uint8Array
+        // Handle session.created event - send configuration
+        if (data.type === 'session.created') {
+          console.log('Session created, sending configuration');
+          const sessionUpdate = {
+            type: 'session.update',
+            session: {
+              modalities: ["text", "audio"],
+              instructions: `Olet suomenkielinen haastattelija. Tärkeää:
+
+KÄYTÄ NÄITÄ HAASTATTELUKYSYMYKSIÄ:
+${interviewQuestions.map((q, i) => `${i + 1}. ${q}`).join('\n')}
+
+OHJEET:
+- Aloita tervehtimällä ja kerro että kyseessä on haastattelu
+- Kysele yllä olevia kysymyksiä järjestyksessä
+- Kuuntele vastauksia ja tee tarkentavia kysymyksiä
+- Siirry seuraavaan kysymykseen kun saat riittävän vastauksen
+- Ole luonnollinen ja keskusteleva
+- Pidä vastaukset lyhyinä (alle 50 sanaa)
+- ÄLÄ keksi omia kysymyksiä, käytä vain yllä olevia`,
+              voice: "alloy",
+              input_audio_format: "pcm16",
+              output_audio_format: "pcm16",
+              input_audio_transcription: {
+                model: "whisper-1"
+              },
+              turn_detection: {
+                type: "server_vad",
+                threshold: 0.5,
+                prefix_padding_ms: 300,
+                silence_duration_ms: 1000
+              },
+              temperature: 0.8,
+              max_response_output_tokens: "inf"
+            }
+          };
+          this.ws?.send(JSON.stringify(sessionUpdate));
+          
+          // Start audio recording after session is configured
+          await this.startAudioRecording();
+          this.onMessageCallback({ type: 'ready' });
+        } else if (data.type === 'response.audio.delta') {
+          console.log('Received audio delta, playing...');
           const binaryString = atob(data.delta);
           const bytes = new Uint8Array(binaryString.length);
           for (let i = 0; i < binaryString.length; i++) {
             bytes[i] = binaryString.charCodeAt(i);
           }
-          await playAudioData(this.audioContext, bytes);
+          await playAudioData(this.audioContext!, bytes);
+        } else if (data.type === 'response.audio_transcript.delta') {
+          console.log('AI transcript:', data.delta);
+          this.onMessageCallback({
+            type: 'assistant.message',
+            content: data.delta
+          });
+        } else if (data.type === 'input_audio_buffer.speech_started') {
+          console.log('User speech started');
+          this.onMessageCallback({ type: 'user.speaking_started' });
+        } else if (data.type === 'input_audio_buffer.speech_stopped') {
+          console.log('User speech stopped');
+          this.onMessageCallback({ type: 'user.speaking_stopped' });
+        } else if (data.type === 'error') {
+          console.error('OpenAI error:', data.error);
         }
-      };
-
-      this.ws.onclose = () => {
-        console.log('Disconnected from realtime chat');
-        this.isConnected = false;
-        this.onDisconnect();
-        this.stopRecording();
+        
+        this.onMessageCallback(data);
       };
 
       this.ws.onerror = (error) => {
         console.error('WebSocket error:', error);
-        this.isConnected = false;
-        this.onDisconnect();
       };
 
+      this.ws.onclose = (event) => {
+        console.log('WebSocket closed:', event.code, event.reason);
+      };
+      
     } catch (error) {
-      console.error('Error connecting:', error);
+      console.error('Error initializing chat:', error);
       throw error;
     }
   }
 
-  private async startRecording() {
+  private async startAudioRecording() {
     try {
+      console.log('Starting audio recording...');
       this.recorder = new AudioRecorder((audioData) => {
-        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-          const encodedAudio = encodeAudioForAPI(audioData);
+        if (this.ws?.readyState === WebSocket.OPEN) {
           this.ws.send(JSON.stringify({
             type: 'input_audio_buffer.append',
-            audio: encodedAudio
+            audio: encodeAudioForAPI(audioData)
           }));
         }
       });
       
       await this.recorder.start();
-      console.log('Recording started');
+      console.log('Audio recording started successfully');
     } catch (error) {
-      console.error('Error starting recording:', error);
+      console.error('Failed to start audio recording:', error);
+      this.onMessageCallback({ 
+        type: 'error', 
+        message: 'Mikrofonin käyttöoikeus vaaditaan äänikeskusteluun. Anna lupa selaimessa.' 
+      });
     }
   }
 
-  private stopRecording() {
-    if (this.recorder) {
-      this.recorder.stop();
-      this.recorder = null;
-    }
-  }
-
-  disconnect() {
-    this.stopRecording();
-    if (this.ws) {
-      this.ws.close();
-      this.ws = null;
-    }
-    this.isConnected = false;
-  }
-
-  sendMessage(text: string) {
+  async sendMessage(text: string) {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-      console.error('WebSocket not connected');
-      return;
+      throw new Error('WebSocket not ready');
     }
 
     const event = {
@@ -306,5 +361,13 @@ export class RealtimeChat {
 
     this.ws.send(JSON.stringify(event));
     this.ws.send(JSON.stringify({ type: 'response.create' }));
+  }
+
+  disconnect() {
+    console.log('Disconnecting RealtimeChat');
+    this.recorder?.stop();
+    this.ws?.close();
+    this.audioContext?.close();
+    resetAudioQueue(); // Reset audio queue to prevent issues on reconnect
   }
 }

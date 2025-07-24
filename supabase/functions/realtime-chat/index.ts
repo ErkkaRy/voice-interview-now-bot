@@ -1,5 +1,6 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -7,123 +8,214 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  console.log('=== REALTIME-CHAT EDGE FUNCTION STARTED ===');
+  console.log('Request method:', req.method);
+  console.log('Request URL:', req.url);
+  console.log('Request headers:', Object.fromEntries(req.headers.entries()));
+  
   if (req.method === 'OPTIONS') {
+    console.log('Handling CORS preflight');
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
+    // Extract interview ID from URL parameters
+    const url = new URL(req.url);
+    const interviewId = url.searchParams.get('interviewId');
+    const from = url.searchParams.get('from');
+    console.log('URL parameters:', { interviewId, from });
+
     const AZURE_API_KEY = Deno.env.get('AZURE_API_KEY');
-    const AZURE_ENDPOINT = Deno.env.get('AZURE_OPENAI_ENDPOINT');
-    const AZURE_DEPLOYMENT = Deno.env.get('AZURE_OPENAI_DEPLOYMENT_NAME');
-    
-    if (!AZURE_API_KEY || !AZURE_ENDPOINT || !AZURE_DEPLOYMENT) {
-      throw new Error('Azure OpenAI credentials not set');
-    }
+  console.log('Azure API key exists:', !!AZURE_API_KEY);
+  
+  if (!AZURE_API_KEY) {
+    console.log('ERROR: No Azure API key configured');
+    return new Response(JSON.stringify({ error: 'Azure OpenAI API key not configured' }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
 
-    const { searchParams } = new URL(req.url);
-    const upgrade = req.headers.get("upgrade") || "";
-    
-    if (upgrade.toLowerCase() !== "websocket") {
-      return new Response("Expected websocket", { status: 426 });
-    }
+  console.log('Starting WebSocket upgrade...');
+  
+  const { headers } = req;
+  const upgradeHeader = headers.get("upgrade") || "";
 
+  if (upgradeHeader.toLowerCase() !== "websocket") {
+    console.log('ERROR: Expected WebSocket connection but got:', upgradeHeader);
+    return new Response("Expected WebSocket connection", { 
+      status: 400,
+      headers: corsHeaders 
+    });
+  }
+  
+  try {
     const { socket, response } = Deno.upgradeWebSocket(req);
-    let openaiWs: WebSocket | null = null;
+    console.log('WebSocket upgrade successful');
+    let azureWs: WebSocket | null = null;
 
     socket.onopen = async () => {
-      console.log("Client connected");
+      console.log('=== CLIENT WEBSOCKET OPENED ===');
       
-      // Connect to Azure OpenAI Realtime API
       try {
-        const wsUrl = `${AZURE_ENDPOINT.replace('https://', 'wss://').replace('/openai', '')}/openai/realtime?api-version=2024-10-01-preview&deployment=${AZURE_DEPLOYMENT}`;
-        console.log("Connecting to Azure OpenAI:", wsUrl);
+        // Connect to Azure OpenAI Realtime API with api-key in URL
+        const azureUrl = `wss://erkka-ma03prm3-eastus2.cognitiveservices.azure.com/openai/realtime?api-version=2024-10-01-preview&deployment=gpt-4o-realtime-preview&api-key=${AZURE_API_KEY}`;
+        console.log('Attempting to connect to Azure OpenAI...');
+        console.log('Azure URL (without key):', azureUrl.replace(/api-key=[^&]*/, 'api-key=***'));
         
-        openaiWs = new WebSocket(wsUrl, {
-          headers: {
-            "api-key": AZURE_API_KEY
-          }
-        });
+        azureWs = new WebSocket(azureUrl);
+        console.log('Azure WebSocket created, waiting for connection...');
 
-        openaiWs.onopen = () => {
-          console.log("Connected to OpenAI");
+        azureWs.onopen = async () => {
+          console.log('=== AZURE WEBSOCKET CONNECTED SUCCESSFULLY ===');
           
-          // Send session configuration after connection
-          const sessionConfig = {
-            type: "session.update",
-            session: {
-              modalities: ["text", "audio"],
-              instructions: "Olet suomalainen haastattelija. Keskustele käyttäjän kanssa suomeksi. Ole ystävällinen ja kysele kysymyksiä.",
-              voice: "alloy",
-              input_audio_format: "pcm16",
-              output_audio_format: "pcm16",
-              input_audio_transcription: {
-                model: "whisper-1"
-              },
-              turn_detection: {
-                type: "server_vad",
-                threshold: 0.5,
-                prefix_padding_ms: 300,
-                silence_duration_ms: 1000
-              },
-              temperature: 0.8,
-              max_response_output_tokens: "inf"
+          // Get interview questions if interviewId is provided
+          if (interviewId) {
+            try {
+              const supabase = createClient(
+                Deno.env.get('SUPABASE_URL')!,
+                Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+              );
+              
+              const { data: interview, error } = await supabase
+                .from('interviews')
+                .select('*')
+                .eq('id', interviewId)
+                .single();
+                
+              if (interview && !error) {
+                console.log('Loaded interview questions:', interview.questions);
+                azureWs.interviewQuestions = interview.questions;
+                azureWs.interviewTitle = interview.title;
+              }
+            } catch (error) {
+              console.error('Error loading interview:', error);
             }
-          };
-          
-          openaiWs.send(JSON.stringify(sessionConfig));
-        };
-
-        openaiWs.onmessage = (event) => {
-          console.log("OpenAI message:", event.data);
-          // Forward OpenAI messages to client
-          if (socket.readyState === WebSocket.OPEN) {
-            socket.send(event.data);
           }
         };
 
-        openaiWs.onerror = (error) => {
-          console.error("OpenAI WebSocket error:", error);
-          socket.close();
+        azureWs.onmessage = (event) => {
+          console.log('Message from Azure OpenAI:', event.data);
+          
+          const data = JSON.parse(event.data);
+          
+          // Handle session.created event - send configuration
+          if (data.type === 'session.created') {
+            console.log('Session created, sending configuration');
+            
+            const questions = azureWs.interviewQuestions || ['Kerro itsestäsi.'];
+            const title = azureWs.interviewTitle || 'haastattelu';
+            
+            const questionsText = questions.map((q, i) => `${i + 1}. ${q}`).join('\n');
+            
+            const sessionUpdate = {
+              type: 'session.update',
+              session: {
+                modalities: ["text", "audio"],
+                instructions: `Olet suomenkielinen haastattelija. 
+
+ALOITA HETI: "Hei! Aloitetaan ${title}. ${questions[0]}"
+
+KÄYTÄ NÄITÄ KYSYMYKSIÄ JÄRJESTYKSESSÄ:
+${questionsText}
+
+SÄÄNNÖT:
+- KYSY yksi kysymys kerrallaan
+- ODOTA vastaus ennen seuraavaa 
+- Pidä vastaukset lyhyinä (alle 20 sanaa)
+- Kun kaikki kysytty: "Kiitos! Haastattelu valmis."
+- ÄLÄ keksi lisäkysymyksiä`,
+                voice: "alloy",
+                input_audio_format: "pcm16",
+                output_audio_format: "pcm16",
+                input_audio_transcription: {
+                  model: "whisper-1"
+                },
+                turn_detection: {
+                  type: "server_vad",
+                  threshold: 0.5,
+                  prefix_padding_ms: 300,
+                  silence_duration_ms: 1000
+                },
+                temperature: 0.7,
+                max_response_output_tokens: 100
+              }
+            };
+            azureWs?.send(JSON.stringify(sessionUpdate));
+            
+            // Auto-start the interview
+            setTimeout(() => {
+              if (azureWs && azureWs.readyState === WebSocket.OPEN) {
+                azureWs.send(JSON.stringify({
+                  type: 'response.create'
+                }));
+              }
+            }, 500);
+          }
+          
+          // Forward all messages to client
+          socket.send(event.data);
         };
 
-        openaiWs.onclose = () => {
-          console.log("OpenAI connection closed");
+        azureWs.onerror = (error) => {
+          console.error('=== AZURE WEBSOCKET ERROR ===');
+          console.error('Azure WebSocket error details:', error);
+          console.error('Azure WebSocket readyState:', azureWs?.readyState);
+          socket.send(JSON.stringify({ type: 'error', error: 'Azure OpenAI connection failed', details: String(error) }));
+        };
+
+        azureWs.onclose = (event) => {
+          console.log('=== AZURE WEBSOCKET CLOSED ===');
+          console.log('Close code:', event.code);
+          console.log('Close reason:', event.reason);
+          console.log('Was clean:', event.wasClean);
           socket.close();
         };
 
       } catch (error) {
-        console.error("Error connecting to OpenAI:", error);
-        socket.close();
+        console.error('=== ERROR CONNECTING TO AZURE ===');
+        console.error('Error details:', error);
+        socket.send(JSON.stringify({ type: 'error', error: 'Failed to connect to Azure OpenAI', details: String(error) }));
       }
     };
 
     socket.onmessage = (event) => {
-      console.log("Client message:", event.data);
-      // Forward client messages to OpenAI
-      if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
-        openaiWs.send(event.data);
+      console.log('Message from client:', event.data);
+      if (azureWs && azureWs.readyState === WebSocket.OPEN) {
+        azureWs.send(event.data);
       }
     };
 
     socket.onclose = () => {
-      console.log("Client disconnected");
-      if (openaiWs) {
-        openaiWs.close();
+      console.log('Client WebSocket closed');
+      if (azureWs) {
+        azureWs.close();
       }
     };
 
     socket.onerror = (error) => {
-      console.error("Client WebSocket error:", error);
-      if (openaiWs) {
-        openaiWs.close();
+      console.error('=== CLIENT WEBSOCKET ERROR ===');
+      console.error('Client WebSocket error:', error);
+      if (azureWs) {
+        azureWs.close();
       }
     };
 
+    console.log('Returning WebSocket response...');
     return response;
-
+    
   } catch (error) {
-    console.error("Error in realtime-chat function:", error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    console.error('=== WEBSOCKET UPGRADE FAILED ===');
+    console.error('Upgrade error:', error);
+    return new Response(JSON.stringify({ error: 'WebSocket upgrade failed', details: String(error) }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+  } catch (outerError) {
+    console.error('=== OUTER CATCH ERROR ===');
+    console.error('Outer error details:', outerError);
+    return new Response(JSON.stringify({ error: 'Function failed', details: String(outerError) }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

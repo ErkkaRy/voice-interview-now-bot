@@ -9,7 +9,6 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import InterviewCreator from "@/components/InterviewCreator";
 import InterviewLauncher from "@/components/InterviewLauncher";
-import VoiceChat from "@/components/VoiceChat";
 
 const Index = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -279,39 +278,82 @@ const Index = () => {
         </div>
 
         {/* Dashboard */}
-        <Tabs defaultValue="voice-chat" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="voice-chat">Äänichatti</TabsTrigger>
-            <TabsTrigger value="create">Luo haastattelu</TabsTrigger>
-            <TabsTrigger value="launch">Käynnistä haastattelu</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="voice-chat" className="mt-6">
-            <VoiceChat />
-          </TabsContent>
-          
-          <TabsContent value="create" className="mt-6">
-            <InterviewCreator 
-              onInterviewCreated={() => {
-                fetchInterviews();
-              }}
-              editingInterview={editingInterview}
-              onClose={() => {
-                setEditingInterview(null);
-              }}
-            />
-          </TabsContent>
-          
-          <TabsContent value="launch" className="mt-6">
+        <div className="grid lg:grid-cols-3 gap-8">
+          {/* Quick Actions */}
+          <div className="lg:col-span-2">
+            <Card className="border-0 shadow-lg bg-white/80 backdrop-blur mb-6">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <CheckCircle className="h-5 w-5 text-green-600" />
+                  Pikaiset toiminnot
+                </CardTitle>
+                <CardDescription>Aloita uusi haastattelu nopeasti</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <Button 
+                    onClick={handleCreateInterview}
+                    className="h-20 bg-blue-600 hover:bg-blue-700 flex-col gap-2"
+                  >
+                    <FileText className="h-6 w-6" />
+                    Luo uusi haastattelu
+                  </Button>
+                  <div className="h-20 p-4 border-2 border-dashed border-slate-300 rounded-lg flex flex-col items-center justify-center text-slate-500">
+                    <Phone className="h-6 w-6 mb-1" />
+                    <span className="text-sm">Käynnistä haastattelu alempana</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Interview Launcher */}
             <InterviewLauncher 
               interviews={interviews} 
               isLoading={isLoading}
               onEditInterview={(interview) => {
                 setEditingInterview(interview);
+                setCurrentView("create-interview");
               }}
             />
-          </TabsContent>
-        </Tabs>
+          </div>
+
+          {/* Stats Sidebar */}
+          <div className="space-y-6">
+            <Card className="border-0 shadow-lg bg-white/80 backdrop-blur">
+              <CardHeader>
+                <CardTitle className="text-lg">Tilastot</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="text-center">
+                  <div className="text-3xl font-bold text-blue-600">12</div>
+                  <div className="text-sm text-slate-600">Haastattelua yhteensä</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-3xl font-bold text-green-600">8</div>
+                  <div className="text-sm text-slate-600">Onnistuneita</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-3xl font-bold text-orange-600">3</div>
+                  <div className="text-sm text-slate-600">Keskeneräisiä</div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-0 shadow-lg bg-white/80 backdrop-blur">
+              <CardHeader>
+                <CardTitle className="text-lg">Tuki</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-slate-600 mb-4">
+                  Tarvitsetko apua palvelun käytössä?
+                </p>
+                <Button variant="outline" className="w-full border-slate-300 hover:bg-slate-50">
+                  Ota yhteyttä
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       </div>
     </div>
   );
