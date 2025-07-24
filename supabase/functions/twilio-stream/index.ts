@@ -8,9 +8,10 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  console.log('=== TWILIO STREAM FUNCTION STARTED ===');
+  console.log('=== TWILIO STREAM FUNCTION STARTED v2 ===');
   console.log('Request method:', req.method);
   console.log('Request URL:', req.url);
+  console.log('Headers:', Object.fromEntries(req.headers.entries()));
   
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
