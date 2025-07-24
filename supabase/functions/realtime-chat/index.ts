@@ -12,9 +12,12 @@ serve(async (req) => {
   }
 
   try {
-    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
-    if (!OPENAI_API_KEY) {
-      throw new Error('OPENAI_API_KEY is not set');
+    const AZURE_API_KEY = Deno.env.get('AZURE_API_KEY');
+    const AZURE_ENDPOINT = Deno.env.get('AZURE_OPENAI_ENDPOINT');
+    const AZURE_DEPLOYMENT = Deno.env.get('AZURE_OPENAI_DEPLOYMENT_NAME');
+    
+    if (!AZURE_API_KEY || !AZURE_ENDPOINT || !AZURE_DEPLOYMENT) {
+      throw new Error('Azure OpenAI credentials not set');
     }
 
     const { searchParams } = new URL(req.url);
@@ -30,17 +33,16 @@ serve(async (req) => {
     socket.onopen = async () => {
       console.log("Client connected");
       
-      // Connect to OpenAI Realtime API
+      // Connect to Azure OpenAI Realtime API
       try {
-        openaiWs = new WebSocket(
-          "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01",
-          {
-            headers: {
-              "Authorization": `Bearer ${OPENAI_API_KEY}`,
-              "OpenAI-Beta": "realtime=v1"
-            }
+        const wsUrl = `${AZURE_ENDPOINT.replace('https://', 'wss://').replace('/openai', '')}/openai/realtime?api-version=2024-10-01-preview&deployment=${AZURE_DEPLOYMENT}`;
+        console.log("Connecting to Azure OpenAI:", wsUrl);
+        
+        openaiWs = new WebSocket(wsUrl, {
+          headers: {
+            "api-key": AZURE_API_KEY
           }
-        );
+        });
 
         openaiWs.onopen = () => {
           console.log("Connected to OpenAI");
