@@ -82,7 +82,7 @@ serve(async (req) => {
     console.log('Starting interview:', interview.title);
 
     // Use Stream for real-time audio processing with OpenAI
-    const streamUrl = `wss://jhjbvmyfzmjrfoodphuj.supabase.co/functions/v1/realtime-chat?interviewId=${interview.id}&from=${from}`;
+    const streamUrl = `wss://jhjbvmyfzmjrfoodphuj.supabase.co/functions/v1/twilio-stream?interviewId=${interview.id}&from=${from}`;
     
     console.log('Creating TwiML response with Stream:', {
       interviewId: interview.id,
