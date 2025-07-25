@@ -85,18 +85,15 @@ serve(async (req) => {
     }
 
     console.log('Starting interview:', interview.title);
-
-    // For now, let's try a simple approach without WebSocket streaming
-    // since WebSocket connections seem to have issues with Supabase Edge Functions
+    console.log('Setting up WebSocket stream to OpenAI');
     
-    console.log('Creating simple TwiML response without streaming for now');
+    // Use Twilio's Stream functionality to connect to our WebSocket endpoint
+    const streamUrl = `wss://jhjbvmyfzmjrfoodphuj.functions.supabase.co/twilio-stream?interviewId=${interview.id}&from=${encodeURIComponent(from)}`;
     
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say voice="alice" language="fi-FI">Hei! Tämä on ${interview.title} haastattelu.</Say>
-  <Say voice="alice" language="fi-FI">${interview.questions[0]}</Say>
-  <Record timeout="10" playBeep="true" action="/functions/v1/handle-recording" />
-  <Say voice="alice" language="fi-FI">Kiitos vastauksestasi. Puhelu päättyy.</Say>
+  <Say voice="alice" language="fi-FI">Hei! Aloitetaan ${interview.title} haastattelu. Hetki kun yhdistän sinut tekoälyyn.</Say>
+  <Stream url="${streamUrl}" />
 </Response>`;
 
     return new Response(twiml, {
